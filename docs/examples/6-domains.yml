@@ -1,0 +1,79 @@
+about: The formulas of our three example files (pipelines, shop, router), each run on the shared data.
+
+examples:
+  # ── Pipelines: prerequisites and stage conditions ──
+  - about: A file must exist. fileExists is a host function.
+    feel: fileExists("coverage.tests.yml")
+    result: true
+  - about: A variable must be set.
+    feel: vars.TESTOMATIO != null
+    result: false
+  - about: Tests run locally when REMOTE is not set.
+    feel: vars.REMOTE = null
+    result: true
+  - about: Two variables must both be set.
+    feel: vars.EXPLORBOT_URL != null and vars.TEST_COMMAND != null
+    result: true
+  - about: A stage runs when two prerequisites hold.
+    feel: prerequisites.local and prerequisites.coverage
+    result: true
+  - about: Only on release branches.
+    feel: vars.GIT_BRANCH != null and starts with(vars.GIT_BRANCH, "release/")
+    result: true
+  - about: A frontend file changed, and it is not only docs.
+    feel: some file in diff.files satisfies glob(file, "src/**") and not(glob(file, "**/*.md"))
+    result: true
+  - about: At least two source files changed.
+    feel: count(diff.files[glob(item, "src/**") = true]) >= 2
+    result: true
+  - about: 'A schema rule: a stage has either a task or a run, not both, not neither.'
+    data: { task: Review this, run: null }
+    feel: (task != null) != (run != null)
+    result: true
+
+  # ── Shop ──
+  - about: A regular customer.
+    feel: count(customer.orders) >= settings.vip_after_orders or "vip" in customer.tags
+    result: true
+  - about: First order only.
+    feel: count(customer.orders) = 0
+    result: false
+  - about: Over 100, in summer.
+    feel: cart.subtotal >= 100 and today.month in [6, 7, 8]
+    result: false
+  - about: Black Friday week.
+    feel: today.month = 11 and today.day between 24 and 27
+    result: true
+  - about: Shipping price with a free-shipping threshold.
+    feel: if cart.subtotal >= settings.free_shipping_from then 0 else 4.90
+    result: 0
+  - about: Freight by weight.
+    feel: 30 + 1.5 * cart.weight
+    result: 36
+  - about: Everything that is not on sale.
+    feel: cart.items[on_sale = false].name
+    result: [Dune, Lamp, Socks]
+  - about: 'Bundle: every third pair of socks is free. How many free pairs.'
+    feel: floor(sum(cart.items[category = "socks"].qty) / 3)
+    result: 1
+  - about: 'Bundle: the cheapest book at half price.'
+    feel: min(cart.items[category = "books"].price) / 2
+    result: 4
+  - about: 'Bundle: camera and lens together.'
+    feel: count(cart.items[category = "camera"]) > 0 and count(cart.items[category = "lens"]) > 0
+    result: false
+
+  # ── Router ──
+  - about: Signed in.
+    feel: vars.user != null
+    result: true
+  - about: Admin.
+    feel: vars.user != null and vars.user.role = "admin"
+    result: false
+  - about: A member of the project in the path.
+    feel: vars.project in vars.user.projects
+    result: true
+  - about: Reading needs membership; writing needs a role above viewer.
+    data: { in_project: true, writer: false }
+    feel: if vars.method = "GET" then in_project else writer
+    result: true

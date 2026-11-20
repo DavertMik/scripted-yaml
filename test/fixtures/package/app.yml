@@ -1,0 +1,12 @@
+$import:
+  ./host.js: [double]
+  ../settings.yml: settings
+  ../book.md: book
+
+$vars:
+  NAME: { default: world }
+
+greeting: Hello {{ vars.NAME }}
+twice!: double(settings.vip_after_orders)
+title!: book("h1")
+run!sh: npm test

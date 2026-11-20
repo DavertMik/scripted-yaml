@@ -1,0 +1,25 @@
+$vars:
+  STAGING_URL: { optional: true, about: Where the app under test runs. }
+  BRANCH:      { default: main }
+  CI:          { optional: true }
+
+prerequisites:
+  staging:
+    $value!: vars.STAGING_URL != null
+    message: No staging URL. Set STAGING_URL.
+  browser:
+    $value!sh: ls ~/.cache/ms-playwright | grep -q chromium
+    message: No browser installed.
+
+timeout!: if vars.CI != null then "30m" else "10m"
+
+stages:
+  - id: plan
+    title: Plan for {{ vars.BRANCH }}
+    when!: prerequisites.staging
+    task: Write a test plan for {{ vars.STAGING_URL }} in plan.md.
+
+  - id: explore
+    title: Browser testing
+    when!: stages.plan.when and prerequisites.browser
+    run!sh: npx explorbot test plan.md

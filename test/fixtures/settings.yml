@@ -1,0 +1,3 @@
+currency: EUR
+vip_after_orders: 10
+home_countries: [NL, BE, DE]

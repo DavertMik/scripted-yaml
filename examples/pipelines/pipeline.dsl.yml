@@ -1,0 +1,28 @@
+# For checking pipeline files only: their shape and the variables they may read.
+# A pipeline loads and computes the same without this file.
+# Formulas are FEEL. A variable that is unset or empty is null, so "is set" is: vars.NAME != null
+
+# Markers (!sh) are registered by the application. Functions (fileExists, glob) are imported
+# by each pipeline that calls them, from ./pipeline-host.ts.
+
+$vars:
+  '/[A-Z][A-Z0-9_]*/': { optional: true, about: Any environment variable. }
+  STAGE_DIR: { host: true, about: The folder of the stage that is running. }
+  ITEM:      { host: true, optional: true, about: The current line or file of a loop. }
+
+$schema:
+  required: [name, description, stages*:Stage]
+  optional: [target, summary, env, packages, when, prerequisites*:Prerequisite]
+  Prerequisite:
+    required: [$value, message]
+    optional: [secret]
+  Stage:
+    key: id
+    required: [id, title]
+    optional: [emoji, task, run, session, when, inputs*, outputs*, continueOn:Continue, optional, timeout, each_line, each_file]
+    rules:
+      - valid!: (task != null) != (run != null)
+        message: a stage has either task or run
+      - valid!: not(each_line != null and each_file != null)
+        message: a stage loops over each_line or each_file, not both
+  Continue: [fail, gate]

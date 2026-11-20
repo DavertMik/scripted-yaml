@@ -1,0 +1,13 @@
+role: admin
+ok: true
+items: [a, b]
+price: 5
+test-command: npm test
+
+same!: role == "admin"
+allowed!: role in ["admin", "owner"] and ok
+blocked!: not ok
+first!: items[0]
+label!: prise * 2
+ready!: test-command != null
+ci!: vars.CI != null

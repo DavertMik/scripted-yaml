@@ -1,0 +1,152 @@
+about: >-
+  Mistakes that are easy to make coming from JavaScript or Ruby. Each trap is shown
+  wrong, then right. "error: true" means FEEL refuses the formula. "warns: true" means
+  FEEL gives a warning, which our loader turns into an error. Entries with neither are
+  the dangerous ones: a wrong answer and no complaint.
+
+examples:
+  # ── Equality ──
+  - about: 'WRONG: two equals signs. No error, no warning, the answer is null.'
+    feel: vars.method == "GET"
+    result: null
+  - about: RIGHT.
+    feel: vars.method = "GET"
+    result: true
+
+  # ── Quotes ──
+  - about: 'WRONG: single quotes.'
+    feel: vars.method = 'GET'
+    error: true
+  - about: RIGHT.
+    feel: vars.method = "GET"
+    result: true
+
+  # ── Not ──
+  - about: 'WRONG: not without brackets. FEEL reads "not prerequisites" as one name.'
+    feel: not prerequisites.testomatio
+    result: null
+    warns: true
+  - about: RIGHT.
+    feel: not(prerequisites.testomatio)
+    result: true
+  - about: 'WRONG: JavaScript operators.'
+    feel: prerequisites.coverage && !prerequisites.testomatio
+    error: true
+
+  # ── "in" followed by and / or ──
+  - about: >-
+      WRONG: "in" swallows what follows it. This reads as: role in (list and coverage).
+      Null, silently.
+    feel: vars.user.role in ["admin", "editor"] and prerequisites.coverage
+    result: null
+  - about: 'WRONG: the same with "or". The true answer would be true; FEEL says false. Silent.'
+    feel: vars.user.role in ["admin"] or prerequisites.coverage
+    result: false
+  - about: 'RIGHT: brackets around the "in" test.'
+    feel: (vars.user.role in ["admin", "editor"]) and prerequisites.coverage
+    result: true
+  - about: 'ALSO RIGHT: put the "in" test last.'
+    feel: prerequisites.coverage and vars.user.role in ["admin", "editor"]
+    result: true
+
+  # ── Truthiness: there is none ──
+  - about: 'WRONG: text used as yes/no. The answer is null, silently.'
+    feel: vars.TEST_COMMAND and prerequisites.coverage
+    result: null
+  - about: RIGHT.
+    feel: vars.TEST_COMMAND != null and prerequisites.coverage
+    result: true
+  - about: 'WRONG: not() of text is null, not false.'
+    feel: not(vars.TEST_COMMAND)
+    result: null
+  - about: RIGHT.
+    feel: vars.TEST_COMMAND = null
+    result: false
+
+  # ── If ──
+  - about: 'WRONG: if without else.'
+    feel: if vars.CI then "ci"
+    error: true
+  - about: 'WRONG: the ternary.'
+    feel: 'vars.CI ? "ci" : "local"'
+    error: true
+  - about: RIGHT.
+    feel: if vars.CI then "ci" else "local"
+    result: ci
+
+  # ── Lists ──
+  - about: 'WRONG: counting from 0. Position 0 does not exist.'
+    feel: cart.items[0].name
+    result: null
+    warns: true
+  - about: RIGHT.
+    feel: cart.items[1].name
+    result: Dune
+  - about: 'WRONG: methods and .length do not exist.'
+    feel: cart.items.length
+    result: [null, null, null, null]
+    warns: true
+  - about: RIGHT.
+    feel: count(cart.items)
+    result: 4
+  - about: 'WRONG: a filter that is only a function call loses the item.'
+    feel: cart.items[not(on_sale)].name
+    result: []
+    warns: true
+  - about: 'RIGHT: make the filter a comparison.'
+    feel: cart.items[on_sale = false].name
+    result: [Dune, Lamp, Socks]
+  - about: 'WRONG: a host function alone as the filter. It is handed null instead of the item, and here it crashes.'
+    feel: diff.files[glob(item, "src/**")]
+    error: true
+  - about: 'RIGHT: compare its answer with true.'
+    feel: diff.files[glob(item, "src/**") = true]
+    result: [src/cart.ts, src/cart.test.ts]
+  - about: 'WRONG: sum of nothing is null, not 0. Silent.'
+    feel: sum(cart.items[category = "toys"].price)
+    result: null
+  - about: 'RIGHT: count of nothing is 0; for a sum, add a zero to the list.'
+    feel: sum(append(cart.items[category = "toys"].price, 0))
+    result: 0
+  - about: >-
+      WRONG: a function parameter named like a field of the item. Inside the brackets
+      "category" is the item's own field, so every item matches. Silent.
+    feel: (function(category) cart.items[item.category = category])("books").name
+    result: [Dune, Lamp, Emma, Socks]
+  - about: 'RIGHT: give the parameter another name.'
+    feel: (function(wanted) cart.items[category = wanted])("books").name
+    result: [Dune, Emma]
+
+  # ── Text and numbers ──
+  - about: 'WRONG: joining text and a number gives null.'
+    feel: '"Total: " + cart.subtotal'
+    result: null
+    warns: true
+  - about: RIGHT.
+    feel: '"Total: " + string(cart.subtotal)'
+    result: "Total: 103"
+  - about: 'WRONG: comparing a number with text is null, not false. Silent.'
+    feel: cart.weight = "4"
+    result: null
+
+  # ── Names ──
+  - about: 'WRONG: a misspelt field. Null with a warning.'
+    feel: cart.subtotl > 100
+    result: null
+    warns: true
+  - about: 'WRONG: a misspelt name. Null with a warning.'
+    feel: crt.subtotal > 100
+    result: null
+    warns: true
+  - about: 'WRONG: a name with a dollar sign is not a FEEL name.'
+    feel: $vars.method = "GET"
+    error: true
+  - about: >-
+      CAREFUL: a field of something that is null warns, even behind a null check,
+      because "and" looks at both sides. The answer is still right.
+    feel: vars.missing_user != null and vars.missing_user.role = "admin"
+    result: false
+    warns: true
+  - about: 'SAFE: "if" looks at one side only.'
+    feel: if vars.REMOTE != null then starts with(vars.REMOTE, "ci") else false
+    result: false

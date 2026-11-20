@@ -1,0 +1,63 @@
+{
+  "name": "scripted-yaml",
+  "version": "0.1.0",
+  "description": "YAML files with marked formulas (FEEL): validate, parse, load, resolve.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DavertMik/scripted-yaml.git"
+  },
+  "homepage": "https://github.com/DavertMik/scripted-yaml#readme",
+  "bugs": {
+    "url": "https://github.com/DavertMik/scripted-yaml/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "scripted-yaml": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "build": "rm -rf dist && bun build src/index.ts src/cli.ts --outdir dist --target node --packages external && tsc -p tsconfig.build.json",
+    "prepublishOnly": "bun run typecheck && bun test && bun run build"
+  },
+  "dependencies": {
+    "feelers": "^3.2.0",
+    "feelin": "^8.2.2",
+    "mdq-cli": "^0.1.4",
+    "yaml": "^2.8.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.6.0"
+  },
+  "keywords": [
+    "yaml",
+    "feel",
+    "dmn",
+    "expressions",
+    "config",
+    "dsl",
+    "rules",
+    "pipeline",
+    "frontmatter"
+  ]
+}

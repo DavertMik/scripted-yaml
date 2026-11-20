@@ -1,0 +1,64 @@
+$dsl: ./pipeline.dsl.yml
+name: web-testing
+description: Review a pull request, test the change in a browser with Explorbot, explain what broke.
+target: pr
+
+$vars:
+  EXPLORBOT_VERSION: { default: latest }
+
+prerequisites:
+  staging:
+    $value!: vars.EXPLORBOT_URL != null
+    message: No staging URL. Set EXPLORBOT_URL to test in a browser.
+  browser:
+    $value!sh: ls "${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}" | grep -q chromium
+    message: No browser. Run npx playwright install --with-deps chromium.
+  explorbot_ai:
+    $value!: vars.EXPLORBOT_AI_PROVIDER != null
+    message: Explorbot has no AI provider. Set EXPLORBOT_AI_PROVIDER and its key.
+  can_explore:
+    $value!: prerequisites.staging and prerequisites.browser and prerequisites.explorbot_ai
+    message: Browser testing needs a staging URL, a browser and an AI provider.
+
+env:
+  EXPLORBOT_NO_BANNER: "1"
+
+packages:
+  explorbot!: vars.EXPLORBOT_VERSION
+
+stages:
+  - id: review
+    title: Review
+    emoji: 🔍
+    session: qa
+    task: Review this pull request as a QA engineer. List the scenarios worth checking in a browser. /qa-review-pr
+
+  - id: write-plan
+    title: Test plan
+    emoji: 🗺️
+    session: qa
+    when!: prerequisites.staging
+    task: Turn the browser scenarios in review.md into an Explorbot test plan for {{ vars.EXPLORBOT_URL }} in plan.md. /explorbot-plan
+    inputs: [review.md]
+    outputs: [plan.md]
+
+  - id: explore
+    title: Browser testing
+    emoji: 🌐
+    when!: prerequisites.can_explore
+    run!sh: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx explorbot test "$STAGE_DIR/plan.md" '*'
+    inputs: [plan.md]
+    outputs: [explorbot/]
+    # Failed scenarios go to the results stage, which says which are real.
+    continueOn: fail
+    timeout: 30m
+
+  - id: results
+    title: Results
+    emoji: 📊
+    session: qa
+    when!: prerequisites.can_explore
+    task: |
+      Read the Explorbot report in explorbot/ and say which failed scenarios are real defects and which are noise. /explorbot-fundamentals
+      Fail the run if any is a real defect.
+    inputs: [plan.md, explorbot/]

@@ -1,0 +1,87 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { Checker } from './checker.js';
+import { Document, type Marker } from './document.js';
+import { type Imported, Importer, ImportFailed, type ImportHost } from './importers.js';
+import { Problem, Problems, ValidationFailed } from './problem.js';
+import { type Source, SourceLoader } from './source.js';
+
+export interface ScriptedYamlOptions {
+  /**
+   * One function per marker name (`run!sh:` calls `sh`), or only the names where files are just checked.
+   * This is the only thing an application registers: functions come from each file's `$import`.
+   */
+  markers?: Record<string, Marker> | string[];
+}
+
+export interface FileOptions {
+  /** The name of the file, for problems, and the place its `$dsl`, `$extends` and `$import` paths start from. */
+  file?: string;
+}
+
+/** Validates, parses and loads scripted-yaml files. It computes nothing: see `Document.resolve`. */
+export class ScriptedYaml {
+  private readonly markers: Record<string, Marker | undefined> = {};
+
+  constructor(options: ScriptedYamlOptions = {}) {
+    if (Array.isArray(options.markers)) for (const name of options.markers) this.markers[name] = undefined;
+    else Object.assign(this.markers, options.markers);
+  }
+
+  /** Checks text (or data already parsed) and returns the problems. Runs nothing: no marker function, no formula, no import. */
+  async validate(input: unknown, options: FileOptions = {}): Promise<Problem[]> {
+    return this.check(input, options.file ?? '(text)').problems.list;
+  }
+
+  /** Validates, then applies `$extends`, loads each `$import` and calls each marker's function. No formula is computed. */
+  async parse(input: unknown, options: FileOptions = {}): Promise<Document> {
+    return this.open(input, options.file ?? '(text)', []);
+  }
+
+  /** Reads a file, then parses it. */
+  async load(path: string): Promise<Document> {
+    return this.open(this.readFile(path), path, []);
+  }
+
+  private check(input: unknown, file: string): { source: Source | undefined; problems: Problems } {
+    const problems = new Problems();
+    const source = new SourceLoader(problems).load(input, file);
+    if (source) new Checker(source, Object.keys(this.markers), problems).run();
+    problems.sort();
+    return { source, problems };
+  }
+
+  private readFile(path: string): string {
+    try {
+      return readFileSync(path, 'utf8');
+    } catch (error) {
+      throw new ValidationFailed([new Problem(path, 0, 0, '', `cannot read the file: ${(error as Error).message}`)], { cause: error });
+    }
+  }
+
+  /** `chain` holds the files being loaded on the way here, to stop an import that comes back to itself. */
+  private async open(input: unknown, file: string, chain: string[]): Promise<Document> {
+    const { source, problems } = this.check(input, file);
+    if (!source || problems.failed) throw new ValidationFailed(problems.list);
+
+    const host: ImportHost = {
+      document: (absolute) => {
+        if (absolute === resolve(file) || chain.includes(absolute)) throw new ImportFailed('the import comes back to this file: an import cycle');
+        return this.open(this.readFile(absolute), absolute, [...chain, resolve(file)]);
+      },
+    };
+    const imports = new Map<string, Imported>();
+    for (const spec of source.imports) {
+      try {
+        for (const imported of await Importer.for(spec.path)!.load(spec, host)) imports.set(imported.name, imported);
+      } catch (error) {
+        if (error instanceof ImportFailed) problems.error(spec.entry, error.message);
+        else if (error instanceof ValidationFailed) problems.error(spec.entry, `cannot import "${spec.path}": ${error.message}`);
+        else throw error;
+      }
+    }
+    const document = new Document(file, source, imports, this.markers, problems);
+    if (problems.failed) throw new ValidationFailed(problems.list);
+    return document;
+  }
+}

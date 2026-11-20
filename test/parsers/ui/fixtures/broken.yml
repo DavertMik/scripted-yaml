@@ -1,0 +1,11 @@
+$schema:
+  required: [title, components*:Component]
+  Component:
+    required: [type:Kind]
+    optional: [text]
+  Kind: [heading, button]
+
+title: Broken
+components:
+  - type: slider
+    colour: red

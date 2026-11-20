@@ -1,0 +1,7 @@
+$vars:
+  amount: { type: number }
+  items: {}
+  label: { default: none }
+total!: vars.amount * count(vars.items)
+label!: vars.label
+first!: vars.items[1]

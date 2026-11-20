@@ -1,0 +1,16 @@
+name: checks
+$vars:
+  FAST: { optional: true }
+
+stages:
+  - id: lint
+    title: Lint
+    run!sh: npm run lint
+  - id: test
+    title: Tests
+    when!: vars.FAST = null
+    task: Run the whole suite.
+    run!sh: npm test
+  - id: report
+    title: Report
+    task: Summarise the results.

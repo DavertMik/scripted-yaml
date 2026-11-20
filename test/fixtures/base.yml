@@ -1,0 +1,14 @@
+name: base
+$vars:
+  LEVEL: { default: 1 }
+checks:
+  lint: { title: Lint }
+stages:
+  - id: build
+    title: Build
+    when!: vars.LEVEL > 0
+    task: Build it.
+    tags: [a]
+  - id: test
+    title: Test
+    run!sh: npm test

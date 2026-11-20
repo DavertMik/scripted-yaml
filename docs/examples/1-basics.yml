@@ -1,0 +1,98 @@
+about: Comparing, combining, choosing. The forms used in almost every formula.
+
+examples:
+  # ── Comparing ──
+  - about: Equals is ONE equals sign.
+    feel: vars.method = "GET"
+    result: true
+  - about: Not equal.
+    feel: vars.user.role != "viewer"
+    result: true
+  - about: Numbers compare as usual.
+    feel: cart.subtotal >= 100
+    result: true
+  - about: Between two numbers, both ends included.
+    feel: today.day between 24 and 27
+    result: true
+  - about: The same with a range.
+    feel: today.day in [24..27]
+    result: true
+  - about: A round bracket leaves that end out, so 27 is not in (24..27).
+    feel: 27 in (24..27)
+    result: false
+
+  # ── One of ──
+  - about: The value is one of a list.
+    feel: vars.user.role in ["admin", "owner", "editor"]
+    result: true
+  - about: The value is in a list that comes from data.
+    feel: destination.country in settings.home_countries
+    result: true
+  - about: A text is among the tags.
+    feel: '"vip" in customer.tags'
+    result: true
+
+  # ── And, or, not ──
+  - about: Both must be true.
+    feel: prerequisites.coverage and prerequisites.local
+    result: true
+  - about: Either is enough.
+    feel: prerequisites.testomatio or prerequisites.local
+    result: true
+  - about: Not is written as a function, with brackets.
+    feel: not(prerequisites.testomatio)
+    result: true
+  - about: '"and" binds tighter than "or"; brackets make the grouping plain.'
+    feel: prerequisites.coverage and (prerequisites.testomatio or prerequisites.local)
+    result: true
+
+  # ── Set or not set ──
+  - about: A variable that is unset or empty is null. "Is set" is a comparison with null.
+    feel: vars.TEST_COMMAND != null
+    result: true
+  - about: Not set.
+    feel: vars.REMOTE = null
+    result: true
+  - about: Two variables are both set.
+    feel: vars.EXPLORBOT_URL != null and vars.TEST_COMMAND != null
+    result: true
+  - about: A yes/no variable can be used directly.
+    feel: vars.CI and prerequisites.coverage
+    result: true
+
+  # ── Choosing ──
+  - about: If, then, else. The else part is required.
+    feel: if vars.method = "GET" then "read" else "write"
+    result: read
+  - about: A chain of conditions.
+    feel: if cart.subtotal > 1000 then 15 else if cart.subtotal > 100 then 10 else 0
+    result: 10
+  - about: A default for a value that may be unset.
+    feel: if vars.REMOTE != null then vars.REMOTE else "local"
+    result: local
+  - about: Reading a field of something that may be missing, safely.
+    feel: if vars.user != null then vars.user.role else "guest"
+    result: editor
+
+  # ── Numbers ──
+  - about: Arithmetic.
+    feel: 30 + 1.5 * cart.weight
+    result: 36
+  - about: Round down.
+    feel: floor(7 / 3)
+    result: 2
+  - about: Round up.
+    feel: ceiling(7 / 3)
+    result: 3
+  - about: Round to two decimals.
+    feel: decimal(cart.subtotal / 3, 2)
+    result: 34.33
+  - about: The larger of two. max and min take the values, or one list.
+    feel: max(cart.weight, 10)
+    result: 10
+  - about: Remainder.
+    feel: modulo(today.day, 7)
+    result: 4
+  - about: Power.
+    feel: 2 ** 3
+    result: 8

@@ -1,0 +1,9 @@
+$import:
+  ./helpers.js: [slug]          # names the module exports
+  ./settings.yml: settings      # one name for the whole file
+  ./handbook.md: handbook       # a function: selector in, Markdown out
+
+title: Summer Sale
+path!: '"/pages/" + slug(title)'
+free_from: Free shipping from {{ settings.free_shipping_from }} {{ settings.currency }}
+releases!: handbook("section(/^Releases/) paragraph")

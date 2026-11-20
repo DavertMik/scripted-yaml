@@ -1,0 +1,57 @@
+about: >-
+  Text. Strings use double quotes only. A formula that STARTS with a quote must be
+  wrapped in single quotes in YAML, as several below are.
+
+examples:
+  - about: Joining text. Starts with a quote, so the whole formula is in single quotes.
+    feel: '"Test " + vars.service'
+    result: Test checkout
+  - about: A host function in the middle. capitalize is plugged in by the application.
+    feel: '"Test " + capitalize(vars.service)'
+    result: Test Checkout
+  - about: A number must be turned into text before joining.
+    feel: '"Total: " + string(cart.subtotal)'
+    result: "Total: 103"
+  - about: Text to number.
+    feel: number("42") + 1
+    result: 43
+
+  - about: Starts with.
+    feel: starts with(vars.GIT_BRANCH, "release/")
+    result: true
+  - about: Ends with.
+    feel: ends with("README.md", ".md")
+    result: true
+  - about: Contains.
+    feel: contains(vars.EXPLORBOT_URL, "staging")
+    result: true
+  - about: Length.
+    feel: string length(vars.service)
+    result: 8
+  - about: Upper and lower case. Function names may contain spaces.
+    feel: upper case(vars.service)
+    result: CHECKOUT
+  - about: A piece of text. Positions start at 1. Here from position 9 to the end.
+    feel: substring(vars.GIT_BRANCH, 9)
+    result: "2.4"
+  - about: The part before and after a marker.
+    feel: substring after(vars.GIT_BRANCH, "/")
+    result: "2.4"
+  - about: Replace.
+    feel: replace(vars.GIT_BRANCH, "/", "-")
+    result: release-2.4
+  - about: Split into a list.
+    feel: split(vars.GIT_BRANCH, "/")
+    result: [release, "2.4"]
+  - about: Join a list into text.
+    feel: string join(settings.home_countries, ", ")
+    result: NL, BE, DE
+  - about: A pattern (regular expression).
+    feel: matches(vars.GIT_BRANCH, "^release/\d+\.\d+$")
+    result: true
+  - about: Cutting text with a host function.
+    feel: truncate(title, 40)
+    result: A very long product title that certainly…
+  - about: Is set and starts with. Check for null first when the variable may be unset.
+    feel: vars.GIT_BRANCH != null and starts with(vars.GIT_BRANCH, "release/")
+    result: true

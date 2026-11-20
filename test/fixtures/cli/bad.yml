@@ -1,0 +1,5 @@
+total: 5
+ok!sh: ls
+run!bash: npm test
+big!: totl > 3
+ci!: vars.CI = null

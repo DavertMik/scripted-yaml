@@ -1,0 +1,7 @@
+name: demo
+$vars:
+  URL: { optional: true }
+  BRANCH: { default: main }
+ready!: vars.URL != null
+task: Open {{ vars.URL }} on {{ vars.BRANCH }}
+run!sh: npm test

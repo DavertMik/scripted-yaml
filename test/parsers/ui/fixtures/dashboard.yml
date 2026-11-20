@@ -1,0 +1,67 @@
+# A page made of components. Conditions switch parts on and off; "!action" names a handler of the application.
+
+$vars:
+  user:     { optional: true, about: The signed-in user. }
+  projects: { default: [] }
+  theme:    { default: light }
+
+$schema:
+  required: [title, components*:Component]
+  optional: [signed_in, is_admin, failing]
+  Component:
+    required: [type:Kind]
+    optional: [text, click, badge, style, hint, children*:Component]
+  Kind: [heading, button, card, panel, text]
+
+signed_in!: vars.user != null
+is_admin!: signed_in and vars.user.role = "admin"
+failing!: count(vars.projects[failed > 0])
+
+title: Dashboard
+
+components:
+  - type: heading
+    text: Welcome back, {{ vars.user.name }}
+    $if!: signed_in
+
+  - type: button
+    text: Sign in
+    click!action: auth.signIn
+    $unless!: signed_in
+
+  - type: text
+    text: "{{ failing }} of {{ count(vars.projects) }} projects are failing"
+    style: plain
+    $if!: signed_in
+    $when:
+      - $if!: failing > 0
+        style: warning
+      - $if!: failing > 2
+        style: danger
+        hint: Stop the line.
+
+  - $each!: vars.projects
+    $as: project
+    type: card
+    text: "{{ project.name }}"
+    badge!: if project.failed > 0 then string(project.failed) + " failing" else "ok"
+    click!action: projects.open
+    $if!: signed_in and project.archived = false
+
+  - type: panel
+    text: Settings
+    $if!: signed_in
+    children:
+      - type: button
+        text: Theme is {{ vars.theme }}
+        click!action: settings.toggleTheme
+      - type: button
+        text: Invite people
+        click!action: members.invite
+        $if!: is_admin
+      - type: text
+        $when:
+          - $if!: is_admin
+            text: You manage this workspace.
+          - $else:
+            text: Ask an admin to invite people.

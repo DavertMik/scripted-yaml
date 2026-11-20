@@ -1,0 +1,16 @@
+$vars:
+  CI: { optional: true }
+
+role: admin
+ok: true
+items: [a, b]
+price: 5
+test_command: npm test
+
+same!: role = "admin"
+allowed!: (role in ["admin", "owner"]) and ok
+blocked!: not(ok)
+first!: items[1]
+label!: '"Price: " + string(price * 2)'
+ready!: test_command != null
+ci!: vars.CI != null

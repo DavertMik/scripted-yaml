@@ -1,0 +1,35 @@
+# "METHOD /path!: Controller.action". A group is a path with routes under it; "allow!" guards the group.
+
+$import:
+  ./controllers.ts: [Health, Sessions, Users, Projects, Runs]
+
+$vars:
+  user:    { optional: true, about: The signed-in user. Empty when signed out. }
+  method:  { about: The request method. }
+  project: { optional: true }
+  run:     { optional: true }
+
+signed_in!: vars.user != null
+admin!: signed_in and vars.user.role = "admin"
+in_project!: signed_in and (admin or vars.project in vars.user.projects)
+writer!: in_project and vars.user.role != "viewer"
+
+routes:
+  GET /health!: Health.show
+  POST /login!: Sessions.create
+
+  /api:
+    allow!: signed_in
+    limit: 120/min
+    GET /me!: Users.me
+    resources /projects/:project: { to!: Projects, only: [index, create] }
+
+    /projects/:project:
+      allow!: if vars.method = "GET" then in_project else writer
+      GET /!: Projects.show
+      resources /runs/:run!: Runs
+      POST /runs/:run/rerun!: Runs.rerun
+
+  /admin:
+    allow!: admin
+    DELETE /projects/:project!: Projects.destroy

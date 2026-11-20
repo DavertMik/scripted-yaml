@@ -1,0 +1,50 @@
+$dsl: ./pipeline.dsl.yml
+$import:
+  ./pipeline-host.ts: [fileExists]
+
+name: regression
+description: Run the tests a change can break, from the coverage map, then explain the failures.
+target: pr
+
+$vars:
+  TESTOMATIO:  { optional: true, secret: true }
+  BASE_BRANCH: { default: origin/main }
+
+prerequisites:
+  coverage:
+    $value!: fileExists("coverage.tests.yml")
+    message: No coverage.tests.yml. Create one with /qa-test-code-coverage to run only affected tests.
+  testomatio:
+    $value!: vars.TESTOMATIO != null
+    message: No Testomat.io project. Set TESTOMATIO to the project's API key.
+  local:
+    $value!: vars.REMOTE = null
+    message: Tests run on the Testomat.io CI profile. No local log to read.
+  test_command:
+    $value!: vars.TEST_COMMAND != null
+    message: No test command. Set TEST_COMMAND, e.g. "npx playwright test".
+
+when!: prerequisites.coverage
+
+stages:
+  - id: tests
+    title: Tests
+    emoji: 🧪
+    when!: prerequisites.testomatio
+    run!sh: |
+      npx -y @testomatio/reporter run --kind detect --warn \
+        --filter "coverage:file=coverage.tests.yml,diff=$BASE_BRANCH" \
+        ${REMOTE:+--remote "$REMOTE"} ${TEST_COMMAND:+"$TEST_COMMAND"}
+    # Failing tests fail the run, and the next stage triages them.
+    continueOn: fail
+    timeout: 30m
+
+  - id: failures
+    title: Failures
+    emoji: 🐞
+    when!: prerequisites.local and prerequisites.test_command
+    session: triage
+    task: |
+      Triage the failures in tests.log without editing files. /debug-fix-failed-flaky-autotests
+      Fail the run if this change caused a failure.
+    inputs: [tests.log]

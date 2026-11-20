@@ -1,0 +1,33 @@
+# A patch: the bundled web-testing pipeline, changed for a quick smoke check on release branches.
+
+$extends: ./web-testing.yml
+
+prerequisites:
+  $add:
+    release:
+      $value!: vars.GIT_BRANCH != null and starts with(vars.GIT_BRANCH, "release/")
+      message: Not a release branch.
+
+stages:
+  $before:
+    lint:
+      title: Lint
+      run!sh: npm run lint
+      timeout: 5m
+
+  review:
+    task:
+      $after: Keep the list to the five most important scenarios.
+
+  explore:
+    $replace:
+      timeout: 10m
+      when!: base and prerequisites.release
+
+  $remove: [results]
+
+  $after:
+    notify:
+      title: Notify
+      when!: vars.SLACK_HOOK != null
+      run!sh: curl -fsS "$SLACK_HOOK" -d "smoke check finished for $GIT_BRANCH"

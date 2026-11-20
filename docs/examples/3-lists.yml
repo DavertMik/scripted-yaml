@@ -1,0 +1,90 @@
+about: Lists. Picking items, counting, adding up, looping.
+
+examples:
+  # ── Picking items: a condition in square brackets ──
+  - about: The items in one category. Inside the brackets, a bare name is a field of the item.
+    feel: cart.items[category = "books"].name
+    result: [Dune, Emma]
+  - about: The same, saying "item" out loud.
+    feel: cart.items[item.price > 10].name
+    result: [Dune, Lamp]
+  - about: Two conditions.
+    feel: cart.items[category = "books" and on_sale = false].name
+    result: [Dune]
+  - about: One field of every item.
+    feel: cart.items.price
+    result: [12, 40, 8, 5]
+  - about: The first item. Lists count from 1.
+    feel: cart.items[1].name
+    result: Dune
+  - about: The last item.
+    feel: cart.items[-1].name
+    result: Socks
+
+  # ── Counting and adding up ──
+  - about: How many.
+    feel: count(cart.items[category = "books"])
+    result: 2
+  - about: Is there any.
+    feel: count(cart.items[category = "socks"]) > 0
+    result: true
+  - about: Sum of a field.
+    feel: sum(cart.items[category = "books"].price)
+    result: 20
+  - about: Cheapest and dearest price.
+    feel: min(cart.items.price)
+    result: 5
+  - about: The name of the cheapest item.
+    feel: cart.items[price = min(cart.items.price)][1].name
+    result: Socks
+  - about: Average.
+    feel: mean(cart.items.price)
+    result: 16.25
+
+  # ── Loops: one result per item ──
+  - about: A value for each item.
+    feel: for item in cart.items return item.price * item.qty
+    result: [24, 40, 24, 15]
+  - about: Add up a value computed per item.
+    feel: sum(for item in cart.items return item.price * item.qty)
+    result: 103
+  - about: A loop over picked items.
+    feel: for item in cart.items[on_sale = false] return upper case(item.name)
+    result: [DUNE, LAMP, SOCKS]
+  - about: A loop over a range of numbers.
+    feel: for week in 1..3 return week * 7
+    result: [7, 14, 21]
+  - about: Two lists at once, every pair.
+    feel: for country in ["NL", "BE"], speed in ["std", "exp"] return country + "-" + speed
+    result: [NL-std, NL-exp, BE-std, BE-exp]
+
+  # ── Yes or no over a list ──
+  - about: At least one item matches.
+    feel: some item in cart.items satisfies item.price > 30
+    result: true
+  - about: Every item matches.
+    feel: every item in cart.items satisfies item.qty >= 1
+    result: true
+  - about: A changed file is under src/ and is not a test. glob is a host function.
+    feel: some file in diff.files satisfies glob(file, "src/**") and not(glob(file, "**/*.test.ts"))
+    result: true
+
+  # ── Order and pieces ──
+  - about: Sort by a field, cheapest first, then take the names.
+    feel: sort(cart.items, function(a, b) a.price < b.price).name
+    result: [Socks, Emma, Dune, Lamp]
+  - about: The two cheapest.
+    feel: sublist(sort(cart.items, function(a, b) a.price < b.price), 1, 2).name
+    result: [Socks, Emma]
+  - about: Without repeats.
+    feel: distinct values(cart.items.category)
+    result: [books, home, socks]
+  - about: Join names into text.
+    feel: string join(cart.items[price > 10].name, ", ")
+    result: Dune, Lamp
+  - about: Two lists into one.
+    feel: concatenate(customer.tags, ["returning"])
+    result: [vip, newsletter, returning]
+  - about: Is a value in the list, as a function.
+    feel: list contains(customer.tags, "vip")
+    result: true

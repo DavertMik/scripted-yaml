@@ -1,0 +1,47 @@
+# API router.  "METHOD /path!: Controller.action".  A key ending in "!" is a formula, written in FEEL.
+
+$import:
+  ./controllers.ts: [Health, Sessions, Webhooks, Users, Tokens, Projects, Tests, Runs, Admin]
+
+$vars:
+  user:    { type: User, optional: true, about: The signed-in user. Empty when signed out. }
+  method:  { about: The request method. }
+  project: { type: slug }
+  token:   { type: uuid }
+  test:    { type: number }
+  run:     { type: number }
+  member:  { type: number }
+
+signed_in!: vars.user != null
+admin!: signed_in and vars.user.role = "admin"
+in_project!: signed_in and (admin or vars.project in vars.user.projects)
+writer!: in_project and vars.user.role != "viewer"
+
+routes:
+  GET /health!: Health.show
+  POST /login!: Sessions.create
+  DELETE /logout!: Sessions.destroy
+  POST /webhooks/github!: Webhooks.github
+
+  /api/v1:
+    allow!: signed_in
+    limit: 120/min
+    GET /me!: Users.me
+    resources /tokens/:token: { to!: Tokens, only: [index, create, destroy] }
+    resources /projects/:project: { to!: Projects, only: [index, create] }
+
+    /projects/:project:
+      allow!: if vars.method = "GET" then in_project else writer
+      GET /!: Projects.show
+      PATCH /!: Projects.update
+      resources /tests/:test!: Tests
+      resources /runs/:run: { to!: Runs, only: [index, show, create] }
+      POST /runs/:run/rerun!: Runs.rerun
+      GET /runs/:run/report.pdf!: Runs.report
+
+  /admin:
+    allow!: admin
+    limit: 30/min
+    resources /members/:member!: Admin.Members
+    GET /stats!: Admin.Stats.show
+    DELETE /projects/:project!: Admin.Projects.destroy

@@ -1,0 +1,21 @@
+$schema:
+  required: [name, agents*:Agent]
+  optional: [target:Target, lead]
+  Agent:
+    key: name
+    required: [name, role:Role]
+    optional: [about, tools*]
+  Role: [reviewer, tester]
+  Target: [issue, pr]
+
+name: qa-team
+target: pr
+agents:
+  - name: ann
+    role: reviewer
+    tools: [git, gh]
+  - name: raj
+    role: tester
+    about: Runs the browser tests.
+
+lead!: agents.ann.role

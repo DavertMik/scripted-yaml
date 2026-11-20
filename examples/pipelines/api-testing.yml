@@ -1,0 +1,63 @@
+$dsl: ./pipeline.dsl.yml
+name: api-testing
+description: Find the API endpoints a pull request changed, test each with Explorbot, explain what broke.
+target: pr
+
+$vars:
+  EXPLORBOT_VERSION: { default: latest }
+  EXPLORBOT_AUTH:    { optional: true, secret: true }
+
+prerequisites:
+  api:
+    $value!: vars.EXPLORBOT_URL != null and vars.OPENAPI_SPEC != null
+    message: No API to test. Set EXPLORBOT_URL to the API base and OPENAPI_SPEC to its OpenAPI spec.
+  api_auth:
+    $value!: vars.EXPLORBOT_AUTH != null
+    message: No auth instructions passed. If your API is publicly available with no auth - add lines explaining this. But EXPLORBOT_AUTH variable must be set
+  explorbot_ai:
+    $value!: vars.EXPLORBOT_AI_PROVIDER != null
+    message: Explorbot has no AI provider. Set EXPLORBOT_AI_PROVIDER and its key.
+
+env:
+  EXPLORBOT_NO_BANNER: "1"
+
+packages:
+  explorbot!: vars.EXPLORBOT_VERSION
+  "@apidevtools/swagger-cli": latest
+
+stages:
+  - id: spec
+    title: OpenAPI spec
+    emoji: 📜
+    when!: prerequisites.api
+    run!sh: npx swagger-cli validate "$OPENAPI_SPEC"
+    timeout: 2m
+
+  - id: review
+    title: API review
+    emoji: 🔍
+    session: qa
+    when!: prerequisites.api and prerequisites.api_auth
+    task: |
+      Review this pull request for public API changes
+      List the API endpoints it adds or changes in endpoints.txt,
+      List only paths defined in the OpenAPI spec at {{ vars.OPENAPI_SPEC }}; other APIs are out of scope.
+      one path per line, empty if none.
+      Write each path exactly as it appears under `paths:` in {{ vars.OPENAPI_SPEC }},
+      relative to {{ vars.EXPLORBOT_URL }} — no host, no base prefix.
+
+      Check if API is available at {{ vars.EXPLORBOT_URL }}, use {{ vars.EXPLORBOT_AUTH }} to authorize
+      If you need to fill data use /qa-data-seeder to prepare data
+      The endpoints you need to write MUST NOT contain placeholders like {id} - fill them in with exact values
+      Fill in placeholders with values you find out while examining api
+      Exit if API is not accessible
+    outputs: [endpoints.txt]
+
+  - id: explore
+    title: API exploration
+    emoji: 🤖
+    when!: prerequisites.api and prerequisites.explorbot_ai
+    each_line: endpoints.txt
+    run!sh: EXPLORBOT_OUTPUT="$STAGE_DIR/explorbot" npx explorbot api explore "$ITEM" --spec "$OPENAPI_SPEC"
+    outputs: [explorbot/]
+    timeout: 10m

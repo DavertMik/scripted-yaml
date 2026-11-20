@@ -1,0 +1,7 @@
+$dsl: ./pipeline.dsl.yml
+name: broken
+description: A stage without a title, and a marker nobody registered.
+
+stages:
+  - id: lint
+    run!bash: npm run lint

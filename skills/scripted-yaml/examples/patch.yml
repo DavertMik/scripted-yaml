@@ -1,0 +1,25 @@
+$extends: ./base.yml
+
+$vars:
+  RELEASE: { optional: true }
+
+$replace:
+  name: release-checks
+
+stages:
+  $before:
+    install:
+      title: Install
+      run!sh: npm ci
+
+  test:
+    $replace:
+      when!: base and vars.RELEASE != null
+    task:
+      $after: Fail on the first broken test.
+    $after:
+      coverage:
+        title: Coverage
+        run!sh: npm run coverage
+
+  $remove: [report]

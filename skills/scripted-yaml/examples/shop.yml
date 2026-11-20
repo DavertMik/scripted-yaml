@@ -1,0 +1,55 @@
+$vars:
+  cart:     {}
+  customer: {}
+  cities:   { default: [] }
+
+$functions:
+  inCart!: function(wanted) vars.cart.items[category = wanted]
+  total!: function(items) sum(append(items.price, 0))
+
+is_vip!: count(vars.customer.orders) >= 10 or "vip" in vars.customer.tags
+
+discount:
+  loyalty!: if is_vip then vars.cart.subtotal * 0.05 else 0
+  books!: if count(inCart("books")) >= 3 then total(inCart("books")) * 0.1 else 0
+  $value!: max(loyalty, books)
+  note: The bigger of the two discounts applies.
+
+to_pay!: vars.cart.subtotal - discount
+
+shipping:
+  - name: Standard
+    price!: if to_pay >= 50 then 0 else 4.90
+  - name: Express
+    price: 12.90
+    $if!: is_vip
+  - name: Economy
+    price: 2.50
+    $unless!: is_vip
+  - $each!: vars.cities
+    $as: city
+    name: Pickup in {{ city }}
+    price: 0
+    $if!: city != "Paris"
+
+checkout:
+  payment_methods: [card, paypal]
+  $when:
+    - $if!: to_pay > 1000
+      payment_methods: [card, bank_transfer]
+      note: Orders over 1000 need a card or a bank transfer.
+    - $else:
+      note: ''
+
+$tests:
+  - about: A regular customer with three books
+    vars:
+      customer: { orders: [], tags: [vip] }
+      cities: [Lyon, Paris]
+      cart: { subtotal: 60, items: [{ category: books, price: 10 }, { category: books, price: 20 }, { category: books, price: 30 }] }
+    expect:
+      discount: 6
+      discount.note: The bigger of the two discounts applies.
+      to_pay: 54
+      shipping.name: [Standard, Express, Pickup in Lyon]
+      checkout.payment_methods: [card, paypal]

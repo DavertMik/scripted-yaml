@@ -1,0 +1,12 @@
+$vars:
+  '/[A-Z_]+/': { optional: true }
+$schema:
+  required: [steps*:Step]
+  Step:
+    key: name
+    required: [name]
+    optional: [task, run, note]
+    with: { note: [attempt] }
+    rules:
+      - valid!: (task != null) != (run != null)
+        message: a step has either task or run

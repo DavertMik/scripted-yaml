@@ -1,0 +1,45 @@
+$dsl: ./pipeline.dsl.yml
+name: release
+description: Lint, test and publish a release branch.
+target: pr
+
+$vars:
+  NODE_VERSION: { default: "22" }
+  NPM_TOKEN:    { optional: true, secret: true }
+
+prerequisites:
+  release:
+    $value!: vars.GIT_BRANCH != null and starts with(vars.GIT_BRANCH, "release/")
+    message: Not a release branch.
+  token:
+    $value!: vars.NPM_TOKEN != null
+    message: No NPM_TOKEN. The package cannot be published.
+  clean:
+    $value!sh: git diff --quiet
+    message: The working tree has changes.
+  can_publish:
+    $value!: prerequisites.release and prerequisites.token and prerequisites.clean
+    message: Publishing needs a release branch, a token and a clean tree.
+
+stages:
+  - id: lint
+    title: Lint
+    run!sh: npm run lint
+
+  - id: test
+    title: Tests on Node {{ vars.NODE_VERSION }}
+    run!sh: |
+      npm ci
+      npm test -- --reporter dot
+    timeout: 10m
+
+  - id: notes
+    title: Release notes
+    when!: prerequisites.release
+    session: writer
+    task: Write the release notes for {{ vars.GIT_BRANCH }} from the merged pull requests.
+
+  - id: publish
+    title: Publish
+    when!: prerequisites.can_publish
+    run!sh: npm publish --access public

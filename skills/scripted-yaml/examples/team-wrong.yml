@@ -1,0 +1,15 @@
+$schema:
+  required: [name, agents*:Agent]
+  optional: [target:Target]
+  Agent:
+    required: [name, role:Role]
+  Role: [reviewer, tester]
+  Target: [issue, pr]
+
+name: qa-team
+target: branch
+colour: red
+agents:
+  - name: ann
+  - name: raj
+    role: manager

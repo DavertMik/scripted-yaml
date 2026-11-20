@@ -1,0 +1,151 @@
+# Shop rules: discount codes, bundles, shipping.
+# A key ending in "!" is a formula, written in FEEL. Everything else is plain text and numbers.
+
+$vars:
+  cart:        { type: Cart, about: The items, subtotal and weight of the order. }
+  customer:    { type: Customer }
+  destination: { type: Address }
+  today:       { type: Date }
+
+# Short names for the inputs, so the rules below read plainly.
+cart!: vars.cart
+customer!: vars.customer
+destination!: vars.destination
+today!: vars.today
+
+# Functions are written in FEEL. A parameter must not be named like a field of the items
+# it filters: inside [ ... ] the item's own "category" would win over a parameter "category".
+$functions:
+  inCart!: function(wanted) cart.items[category = wanted]
+  cheapest!: function(items, howMany) sublist(sort(items, function(a, b) a.price < b.price), 1, howMany)
+  # sum of an empty list is null in FEEL, so a zero is added: a cart without books still gets a number.
+  total!: function(items) sum(append(items.price, 0))
+
+settings:
+  currency: EUR
+  free_shipping_from: 50
+  vip_after_orders: 10
+  home_countries: [NL, BE, DE]
+
+is_vip!: count(customer.orders) >= settings.vip_after_orders or "vip" in customer.tags
+is_home!: destination.country in settings.home_countries
+
+
+# ── Discount codes ──────────────────────────────────────────────
+# A code works when "valid" is true. Otherwise the customer sees "message".
+
+discount_codes:
+  WELCOME10:
+    title: 10% off your first order
+    percent: 10
+    valid!: count(customer.orders) = 0
+    message: This code is for your first order only.
+
+  SUMMER15:
+    title: 15 off orders over 100, June to August
+    amount: 15
+    valid!: cart.subtotal >= 100 and today.month in [6, 7, 8]
+    message: This code needs an order over 100 and works in summer only.
+
+  VIP20:
+    title: 20% off for our regulars
+    percent: 20
+    valid!: is_vip
+    message: This code is for customers with {{ settings.vip_after_orders }} orders or more.
+
+  FREESHIP:
+    title: Free shipping
+    free_shipping: true
+    valid!: is_home and cart.weight <= 20
+    message: Free shipping covers parcels up to 20 kg within {{ string join(settings.home_countries, ", ") }}.
+
+  BLACKFRIDAY:
+    title: 30% off everything except sale items
+    percent!: if is_vip then 35 else 30
+    applies_to!: cart.items[on_sale = false]
+    valid!: today.month = 11 and today.day between 24 and 27
+    message: This code works from 24 to 27 November.
+
+
+# ── Bundles ─────────────────────────────────────────────────────
+# A bundle is applied by itself, no code needed, when "applies" is true.
+
+bundles:
+  - name: Buy 3 pairs of socks, pay for 2
+    socks!: inCart("socks")
+    free_pairs!: floor(count(socks) / 3)
+    applies!: free_pairs > 0
+    saving!: total(cheapest(socks, free_pairs))
+
+  - name: Camera and lens together, 50 off
+    applies!: count(inCart("camera")) > 0 and count(inCart("lens")) > 0
+    saving: 50
+
+  - name: Three books, the third at half price
+    books!: inCart("books")
+    applies!: count(books) >= 3
+    saving!: total(cheapest(books, 1)) / 2
+
+  - name: Spend 150, get a tote bag
+    applies!: cart.subtotal >= 150
+    gift: tote-bag
+
+
+# ── Shipping ────────────────────────────────────────────────────
+# The customer sees every option that is left after "$if" and "$unless".
+
+shipping:
+  - name: Standard
+    days: 3-5
+    price!: if cart.subtotal >= settings.free_shipping_from then 0 else 4.90
+    $if!: cart.weight <= 20
+
+  - name: Express
+    days: 1-2
+    price!: if is_vip then 0 else 12.90
+    $if!: is_home and cart.weight <= 20
+
+  - name: Pickup point
+    days: 2-4
+    price: 0
+    $if!: destination.country = "NL"
+
+  - name: Freight
+    days: 5-8
+    price!: 30 + 1.5 * cart.weight
+    $if!: cart.weight > 20
+
+  - name: International
+    days: 7-14
+    price!: if cart.subtotal >= 200 then 9.90 else 19.90
+    $unless!: is_home
+
+
+# ── Examples the rules must satisfy ─────────────────────────────
+
+$tests:
+  - about: A regular customer gets the VIP code and free express
+    vars:
+      customer: { orders: [1, 2], tags: [vip] }
+      cart: { subtotal: 120, weight: 3, items: [] }
+      destination: { country: NL }
+      today: { month: 11, day: 25 }
+    expect:
+      is_vip: true
+      discount_codes.VIP20.valid: true
+      discount_codes.BLACKFRIDAY.percent: 35
+      shipping[1].name: Standard
+      shipping[2].price: 0
+
+  - about: A first order from abroad pays international shipping
+    vars:
+      customer: { orders: [], tags: [] }
+      cart: { subtotal: 40, weight: 2, items: [] }
+      destination: { country: US }
+      today: { month: 3, day: 1 }
+    expect:
+      is_home: false
+      discount_codes.WELCOME10.valid: true
+      discount_codes.FREESHIP.valid: false
+      shipping.name: [Standard, International]
+      shipping[2].price: 19.9

@@ -1,0 +1,50 @@
+about: >-
+  Longer formulas. A formula may run over several lines, may hold comments, and may
+  name its steps. It is still one expression: there is no assignment and no statement.
+
+examples:
+  - about: Several lines. Line breaks are spaces.
+    feel: |
+      if cart.subtotal > 1000 then 15
+      else if cart.subtotal > 100 then 10
+      else 0
+    result: 10
+
+  - about: A condition per line, with a comment. An "in" test followed by more gets brackets (see traps).
+    feel: |
+      // editors and admins of this project only
+      vars.user != null
+      and (vars.user.role in ["admin", "editor"])
+      and (vars.project in vars.user.projects)
+    result: true
+
+  - about: A loop with a condition inside.
+    feel: |
+      sum(
+        for item in cart.items
+        return if item.category = "books" then item.price * item.qty else 0
+      )
+    result: 48
+
+  - about: >-
+      Named steps. Each name can use the names above it. The last line picks the answer.
+    feel: |
+      {
+        books: cart.items[category = "books"],
+        subtotal: sum(for book in books return book.price * book.qty),
+        discount: if subtotal > 40 then 10 else 0,
+        result: subtotal - subtotal * discount / 100
+      }.result
+    result: 43.2
+
+  - about: A helper defined and used inside one formula.
+    feel: |
+      {
+        line: function(item) item.price * item.qty,
+        result: max(for item in cart.items return line(item))
+      }.result
+    result: 40
+
+  - about: A loop that uses its own earlier results. "partial" is the list built so far.
+    feel: for n in 1..5 return if n = 1 then 1 else partial[-1] * n
+    result: [1, 2, 6, 24, 120]
