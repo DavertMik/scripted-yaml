@@ -4,6 +4,7 @@ import { extname } from 'node:path';
 import { parseArgs } from 'node:util';
 import { mdq } from 'mdq-cli';
 import { type Marker, type Problem, ScriptedYaml, ScriptedYamlError } from './index.js';
+import { Skills } from './skills.js';
 
 /** A mistake in how the command was called. */
 class UsageError extends Error {}
@@ -25,6 +26,7 @@ class MarkedValue {
 class Arguments {
   readonly files: string[];
   readonly markers: string[];
+  readonly install: boolean;
   private readonly pairs: string[];
   private readonly varsFile: string | undefined;
 
@@ -37,6 +39,7 @@ class Arguments {
     }
     this.files = parsed.positionals;
     this.markers = (parsed.values.markers ?? '').split(',').filter((name) => name !== '');
+    this.install = parsed.values.install ?? false;
     this.pairs = parsed.values.var ?? [];
     this.varsFile = parsed.values.vars;
   }
@@ -67,6 +70,7 @@ class Arguments {
         var: { type: 'string', multiple: true },
         vars: { type: 'string' },
         markers: { type: 'string' },
+        install: { type: 'boolean' },
       },
     });
   }
@@ -134,9 +138,26 @@ class ParseCommand extends Command {
   }
 }
 
-/** The `scripted-yaml` command line: validate files, or print one file resolved. */
+class SkillCommand extends Command {
+  readonly usage = 'scripted-yaml skill [--install [local|global]]';
+  private readonly skills = new Skills();
+
+  async run(args: Arguments): Promise<number> {
+    const [scope = 'local', ...more] = args.files;
+    if (!args.install) {
+      if (args.files.length > 0) throw new UsageError('skill takes no file; to install, add --install');
+      console.log(this.skills.render());
+      return 0;
+    }
+    if (more.length > 0 || !this.skills.scopes.includes(scope)) throw new UsageError(`--install takes ${this.skills.scopes.join(' or ')}`);
+    for (const folder of this.skills.install(scope)) console.log(`installed ${folder}`);
+    return 0;
+  }
+}
+
+/** The `scripted-yaml` command line: validate files, print one file resolved, or install the agent skills. */
 class Cli {
-  private readonly commands: Record<string, Command> = { validate: new ValidateCommand(), parse: new ParseCommand() };
+  private readonly commands: Record<string, Command> = { validate: new ValidateCommand(), parse: new ParseCommand(), skill: new SkillCommand() };
 
   get usage(): string {
     return [
@@ -145,6 +166,9 @@ class Cli {
       '',
       '  validate  prints the problems of each file; the exit code is 1 when there is an error',
       '  parse     prints the file as JSON, every formula computed from the variables given',
+      '  skill     prints the skills that teach a coding agent to write these files and to move',
+      '            application logic into them; --install copies them into .claude/skills and',
+      '            .agents/skills of this project (local, the default) or of your home (global)',
       '',
       '  --markers  the marker names the files use (run!sh: is the marker "sh")',
       '             parse shows a marked value as { "marker": "sh", "source": "…" }',

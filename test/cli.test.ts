@@ -1,5 +1,7 @@
 // The command line, run from source with bun. test/package.test.ts runs the built one with node.
 import { describe, expect, test } from 'bun:test';
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const root = join(import.meta.dir, '..');
@@ -122,5 +124,53 @@ describe('scripted-yaml', () => {
     const run = cli('--help');
     expect(run.out).toContain('scripted-yaml validate <file>...');
     expect(run.code).toBe(0);
+  });
+});
+
+describe('scripted-yaml skill', () => {
+  const skills = ['scripted-yaml', 'scripted-yaml-convert'];
+  const source = (name: string, file: string) => readFileSync(join(root, 'skills', name, file), 'utf8');
+  const at = (cwd: string, home: string, ...args: string[]) => {
+    const run = Bun.spawnSync(['bun', join(root, 'src/cli.ts'), 'skill', ...args], { cwd, env: { ...process.env, HOME: home } });
+    return { code: run.exitCode, out: run.stdout.toString(), err: run.stderr.toString() };
+  };
+  const places = () => ({ project: mkdtempSync(join(tmpdir(), 'sy-project-')), home: mkdtempSync(join(tmpdir(), 'sy-home-')) });
+
+  test('prints both skills and writes nothing', () => {
+    const { project, home } = places();
+    const run = at(project, home);
+    expect(run.code).toBe(0);
+    for (const name of skills) expect(run.out).toContain(source(name, 'SKILL.md'));
+    expect(existsSync(join(project, '.claude'))).toBe(false);
+  });
+
+  test('--install copies the skills with their examples into the project, for every agent', () => {
+    const { project, home } = places();
+    const run = at(project, home, '--install');
+    expect(run.code).toBe(0);
+    for (const dir of ['.claude/skills', '.agents/skills']) {
+      for (const name of skills) {
+        expect(run.out).toContain(`installed ${join(project, dir, name)}\n`);
+        expect(readFileSync(join(project, dir, name, 'SKILL.md'), 'utf8')).toBe(source(name, 'SKILL.md'));
+      }
+      expect(readFileSync(join(project, dir, 'scripted-yaml-convert/examples/pricing.yml'), 'utf8')).toBe(source('scripted-yaml-convert', 'examples/pricing.yml'));
+    }
+    expect(existsSync(join(home, '.claude'))).toBe(false);
+  });
+
+  test('--install global copies them into the home directory', () => {
+    const { project, home } = places();
+    expect(at(project, home, '--install', 'global').code).toBe(0);
+    expect(existsSync(join(home, '.claude/skills/scripted-yaml/SKILL.md'))).toBe(true);
+    expect(existsSync(join(home, '.agents/skills/scripted-yaml-convert/SKILL.md'))).toBe(true);
+    expect(existsSync(join(project, '.claude'))).toBe(false);
+  });
+
+  test('an unknown scope is a usage error and installs nothing', () => {
+    const { project, home } = places();
+    const run = at(project, home, '--install', 'everywhere');
+    expect(run.code).toBe(2);
+    expect(run.err).toContain('--install takes local or global');
+    expect(existsSync(join(project, '.claude'))).toBe(false);
   });
 });

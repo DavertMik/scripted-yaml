@@ -30,6 +30,9 @@ flowchart TD
   different DSLs in one project, all through the same `ScriptedYaml` API.
 - **Structure checking—like TypeScript for YAML.** A defined DSL checks required fields,
   nested shapes, and allowed values. It validates the YAML, not how the application executes it.
+- **Use the included [agent skill](skills/scripted-yaml-convert/SKILL.md) to migrate existing logic.**
+  Ask your agent to extract business rules from application code into YAML specs, preserve
+  the existing behavior, and validate the specs before handing them over for manual control.
 
 ## Small examples
 
@@ -391,6 +394,7 @@ result.theme.accent;                                      // "gold"
 ```
 scripted-yaml validate <file>... [--markers sh,mdq]
 scripted-yaml parse <file> [--var NAME=value]... [--vars file.json] [--markers sh,mdq]
+scripted-yaml skill [--install [local|global]]
 ```
 
 `validate` reports problems (exit 1 on errors). `parse` outputs JSON; markers become
@@ -401,10 +405,25 @@ $ scripted-yaml validate ui.yml --markers js
 ok       ui.yml
 ```
 
+### Agent skills
+
+The package carries two skills for coding agents: one for writing and checking these files, one for
+moving existing application logic into them.
+
+```
+npx scripted-yaml skill                    # print the skills
+npx scripted-yaml skill --install          # install into this project
+npx scripted-yaml skill --install global   # install into your home directory
+```
+
+`--install` copies them into `.claude/skills` and `.agents/skills`, which Claude Code, Codex and
+OpenCode read.
+
 ## Reference
 
 - [Specification](SPEC.md): schemas, imports, inheritance, evaluation rules, and embedded tests.
 - [Agent skill](skills/scripted-yaml/SKILL.md): authoring and validation instructions.
+- [Conversion skill](skills/scripted-yaml-convert/SKILL.md): moving existing application logic into short YAML files.
 - [Examples](examples): shops, UI, RPG, routing, pipelines, and Markdown.
 
 ## Development
