@@ -17,10 +17,10 @@ class Command {
 }
 
 const scripted = () => new ScriptedYaml({ markers: { sh: (source: string) => new Command(source) } });
-const errorsOf = async (text: string, options = { file: 'x.yml' }) => (await scripted().validate(text, options)).filter((problem) => problem.severity === 'error');
+const errorsOf = async (text: string, options = { file: 'x.yml' }) => (await scripted().validateText(text, options)).filter((problem) => problem.severity === 'error');
 const messages = (problems: Problem[]) => problems.map((problem) => problem.message).join('\n');
 const failure = (promise: Promise<unknown>) => promise.then(() => undefined).catch((error) => error);
-const patched = (patch: string) => scripted().parse(`$extends: ./base.yml\n${patch}`, patchFile);
+const patched = (patch: string) => scripted().loadText(`$extends: ./base.yml\n${patch}`, patchFile);
 
 describe('$extends', () => {
   test('a patch with no changes is its base', async () => {
@@ -130,7 +130,7 @@ describe('$extends', () => {
   test('marker functions run once on the patched file, not on what was removed', async () => {
     const sources: string[] = [];
     const library = new ScriptedYaml({ markers: { sh: (source: string) => sources.push(source) } });
-    await library.parse('$extends: ./base.yml\nstages:\n  $remove: [test]\n  $after:\n    lint: { title: Lint, run!sh: npm run lint }\n', patchFile);
+    await library.loadText('$extends: ./base.yml\nstages:\n  $remove: [test]\n  $after:\n    lint: { title: Lint, run!sh: npm run lint }\n', patchFile);
     expect(sources).toEqual(['npm run lint']);
   });
 });
@@ -152,8 +152,8 @@ $schema:
   test('many: a list, or a map whose keys are the names of the items', async () => {
     const list = `${schema}name: x\nagents:\n  - { name: ann, role: tester }\n`;
     const map = `${schema}name: x\nagents:\n  ann: { role: tester }\n`;
-    expect(await scripted().validate(list, { file: 'x.yml' })).toEqual([]);
-    expect(await scripted().validate(map, { file: 'x.yml' })).toEqual([]);
+    expect(await scripted().validateText(list, { file: 'x.yml' })).toEqual([]);
+    expect(await scripted().validateText(map, { file: 'x.yml' })).toEqual([]);
   });
 
   test('one value where many are marked is an error', async () => {
@@ -167,12 +167,12 @@ $schema:
 
   test('any field may be written as a formula or with a marker', async () => {
     const text = `${schema}name!: '"x"'\nagents:\n  - { name: ann, role!: 'if 1 > 0 then "tester" else "reviewer"' }\nlaunch:\n  icon!sh: pick-icon\n`;
-    expect(await scripted().validate(text, { file: 'x.yml' })).toEqual([]);
+    expect(await scripted().validateText(text, { file: 'x.yml' })).toEqual([]);
   });
 
   test('a schema names the field that identifies an item', async () => {
     const text = `${schema}name: x\nagents:\n  - { name: ann, role: tester }\nrole_of_ann!: agents.ann.role\n`;
-    const document = await scripted().parse(text, { file: 'x.yml' });
+    const document = await scripted().loadText(text, { file: 'x.yml' });
     expect((await document.resolve()).role_of_ann).toBe('tester');
   });
 
@@ -182,11 +182,11 @@ $schema:
 
   test('structure keywords are not unlisted keys', async () => {
     const text = `${schema}name: x\nagents:\n  - name: ann\n    role: tester\n    $if!: 1 > 0\n`;
-    expect(await scripted().validate(text, { file: 'x.yml' })).toEqual([]);
+    expect(await scripted().validateText(text, { file: 'x.yml' })).toEqual([]);
   });
 
   test('a file with only a schema is a DSL file: it is not checked against itself', async () => {
-    expect(await scripted().validate(schema, { file: 'agents.dsl.yml' })).toEqual([]);
+    expect(await scripted().validateText(schema, { file: 'agents.dsl.yml' })).toEqual([]);
   });
 });
 
@@ -196,28 +196,28 @@ describe('$dsl', () => {
 
   test('the DSL checks the shape and makes its variables known', async () => {
     const text = steps('  - name: a\n    task: Do it on {{ vars.CI_HOST }}\n');
-    expect(await scripted().validate(text, stepsFile)).toEqual([]);
-    const problems = await scripted().validate(steps('  - task: x\n    colour: red\n'), stepsFile);
+    expect(await scripted().validateText(text, stepsFile)).toEqual([]);
+    const problems = await scripted().validateText(steps('  - task: x\n    colour: red\n'), stepsFile);
     expect(problems.map((problem) => problem.severity).sort()).toEqual(['error', 'warning']);
   });
 
   test('without the $dsl line the file computes the same values', async () => {
     const body = '  - name: a\n    task: Run on {{ vars.CI_HOST }}\n    $if!: vars.CI_HOST != null\n';
-    const withDsl = await (await scripted().parse(steps(body), stepsFile)).resolve({ vars: { CI_HOST: 'ci-1' } });
-    const without = await (await scripted().parse(`steps:\n${body}`, stepsFile)).resolve({ vars: { CI_HOST: 'ci-1' } });
+    const withDsl = await (await scripted().loadText(steps(body), stepsFile)).resolve({ vars: { CI_HOST: 'ci-1' } });
+    const without = await (await scripted().loadText(`steps:\n${body}`, stepsFile)).resolve({ vars: { CI_HOST: 'ci-1' } });
     expect(withDsl).toEqual(without);
     expect(withDsl.steps[0].task).toBe('Run on ci-1');
   });
 
   test('a DSL gives no value and asks for none', async () => {
-    const document = await scripted().parse(steps('  - name: a\n    task: x\n'), stepsFile);
+    const document = await scripted().loadText(steps('  - name: a\n    task: x\n'), stepsFile);
     expect(document.variables).toEqual([]);
     expect(await document.resolve()).toEqual({ steps: [{ name: 'a', task: 'x' }] });
   });
 
   test('a rule is checked syntactically at validation and computed at resolve', async () => {
-    expect(await scripted().validate(steps('  - name: a\n    task: x\n    run!sh: ls\n'), stepsFile)).toEqual([]);
-    const document = await scripted().parse(steps('  - name: a\n    task: x\n    run!sh: ls\n  - name: b\n'), stepsFile);
+    expect(await scripted().validateText(steps('  - name: a\n    task: x\n    run!sh: ls\n'), stepsFile)).toEqual([]);
+    const document = await scripted().loadText(steps('  - name: a\n    task: x\n    run!sh: ls\n  - name: b\n'), stepsFile);
     const error = await failure(document.resolve());
     expect(error).toBeInstanceOf(ResolveFailed);
     expect(error.problems.map((problem: Problem) => [problem.key, problem.message])).toEqual([
@@ -228,7 +228,7 @@ describe('$dsl', () => {
 
   test('a rule sees a marked field as written: its value is never asked for', async () => {
     Command.asked = 0;
-    const document = await scripted().parse(steps('  - name: a\n    run!sh: rm -rf /\n'), stepsFile);
+    const document = await scripted().loadText(steps('  - name: a\n    run!sh: rm -rf /\n'), stepsFile);
     const result = await document.resolve();
     expect(Command.asked).toBe(0);
     expect(result.steps[0].run).toBe(document.data.steps[0].run);
@@ -236,8 +236,8 @@ describe('$dsl', () => {
 
   test('names a schema gives a field through "with" are known, and null when resolved', async () => {
     const text = steps('  - name: a\n    task: x\n    note: Attempt {{ attempt }}.\n');
-    expect(await scripted().validate(text, stepsFile)).toEqual([]);
-    expect((await (await scripted().parse(text, stepsFile)).resolve()).steps[0].note).toBe('Attempt .');
+    expect(await scripted().validateText(text, stepsFile)).toEqual([]);
+    expect((await (await scripted().loadText(text, stepsFile)).resolve()).steps[0].note).toBe('Attempt .');
     expect(messages(await errorsOf(steps('  - name: a\n    task: Attempt {{ attempt }}.\n'), stepsFile))).toContain('attempt');
   });
 
@@ -275,7 +275,7 @@ $tests:
 `;
 
   test('each test resolves the file with its vars and compares the paths under expect', async () => {
-    const results = await (await scripted().parse(shop, { file: 'shop.yml' })).test();
+    const results = await (await scripted().loadText(shop, { file: 'shop.yml' })).test();
     expect(results.map((result) => [result.about, result.passed, result.failures])).toEqual([
       ['A small order pays for shipping', true, []],
       ['A big order ships free', true, []],
@@ -283,25 +283,25 @@ $tests:
   });
 
   test('a wrong expectation is a failure that shows both values', async () => {
-    const results = await (await scripted().parse(shop.replace('discount: 10', 'discount: 15'), { file: 'shop.yml' })).test();
+    const results = await (await scripted().loadText(shop.replace('discount: 10', 'discount: 15'), { file: 'shop.yml' })).test();
     expect(results[1]!.passed).toBe(false);
     expect(results[1]!.failures).toEqual(['discount: expected 15, got 10']);
   });
 
   test('a test whose vars are incomplete fails with the reason', async () => {
-    const results = await (await scripted().parse('$vars:\n  N: {}\nx!: vars.N\n$tests:\n  - expect: { x: 1 }\n', { file: 'x.yml' })).test();
+    const results = await (await scripted().loadText('$vars:\n  N: {}\nx!: vars.N\n$tests:\n  - expect: { x: 1 }\n', { file: 'x.yml' })).test();
     expect(results[0]!.about).toBe('test 1');
     expect(results[0]!.failures[0]).toContain('N');
   });
 
   test('$tests is not part of the data or the result', async () => {
-    const document = await scripted().parse(shop, { file: 'shop.yml' });
+    const document = await scripted().loadText(shop, { file: 'shop.yml' });
     expect('$tests' in document.data).toBe(false);
     expect(Object.keys(await document.resolve({ vars: { cart: { total: 1 } } }))).toEqual(['settings', 'free_shipping', 'shipping', 'discount']);
   });
 
   test('a file without $tests has no results', async () => {
-    expect(await (await scripted().parse('a: 1\n')).test()).toEqual([]);
+    expect(await (await scripted().loadText('a: 1\n')).test()).toEqual([]);
   });
 });
 
@@ -311,14 +311,14 @@ describe('the files in examples/', () => {
   for (const name of pipelines) {
     test(`pipelines/${name}.yml loads with no problem at all`, async () => {
       const file = join(examples, 'pipelines', `${name}.yml`);
-      expect(await scripted().validate(await Bun.file(file).text(), { file })).toEqual([]);
+      expect(await scripted().validateText(await Bun.file(file).text(), { file })).toEqual([]);
       expect((await scripted().load(file)).data.stages.length).toBeGreaterThan(0);
     });
   }
 
   test('pipelines/pipeline.dsl.yml is valid by itself', async () => {
     const file = join(examples, 'pipelines/pipeline.dsl.yml');
-    expect(await scripted().validate(await Bun.file(file).text(), { file })).toEqual([]);
+    expect(await scripted().validateText(await Bun.file(file).text(), { file })).toEqual([]);
   });
 
   test('web-testing resolves: a command is asked for only where a formula reads it', async () => {
@@ -381,7 +381,7 @@ describe('the files in examples/', () => {
 
   test('router.yml loads with its controllers and resolves for a request', async () => {
     const file = join(examples, 'router.yml');
-    expect((await scripted().validate(await Bun.file(file).text(), { file })).filter((problem) => problem.severity === 'error')).toEqual([]);
+    expect((await scripted().validateText(await Bun.file(file).text(), { file })).filter((problem) => problem.severity === 'error')).toEqual([]);
     const document = await scripted().load(file);
     const vars = { user: { role: 'editor', projects: ['shop'] }, method: 'PATCH', project: 'shop', token: 't', test: 1, run: 2, member: 3 };
     const result = await document.resolve({ vars });

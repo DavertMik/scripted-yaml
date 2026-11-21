@@ -1,0 +1,64 @@
+# RPG: a character sheet in the style of classic party role-playing games.
+
+$vars:
+  hero: { about: "Name, class, level and the seven base attributes." }
+  gear: { default: [], about: "Items worn. Each adds an amount to one stat." }
+
+classes:
+  knight:   { hp_per_level: 12, sp_per_level: 0, magic: none }
+  archer:   { hp_per_level: 8,  sp_per_level: 2, magic: intellect }
+  cleric:   { hp_per_level: 7,  sp_per_level: 5, magic: personality }
+  sorcerer: { hp_per_level: 5,  sp_per_level: 6, magic: intellect }
+
+# The row of `classes` for this hero: `get value` looks a key up by a name held in a variable.
+hero_class!: get value(classes, vars.hero.class)
+
+$functions:
+  from_gear(wanted)!: sum(append(vars.gear[stat = wanted].amount, 0))
+  bonus(score)!: floor((score - 10) / 3)
+
+# Base value plus what the gear adds.
+attributes:
+  might!: vars.hero.might + from_gear("might")
+  intellect!: vars.hero.intellect + from_gear("intellect")
+  personality!: vars.hero.personality + from_gear("personality")
+  endurance!: vars.hero.endurance + from_gear("endurance")
+  accuracy!: vars.hero.accuracy + from_gear("accuracy")
+  speed!: vars.hero.speed + from_gear("speed")
+  luck!: vars.hero.luck + from_gear("luck")
+
+casting!: if hero_class.magic = "personality" then attributes.personality else attributes.intellect
+
+stats:
+  hit_points!: (hero_class.hp_per_level + bonus(attributes.endurance)) * vars.hero.level
+  spell_points!: if hero_class.magic = "none" then 0 else (hero_class.sp_per_level + bonus(casting)) * vars.hero.level
+  armor_class!: from_gear("armor") + bonus(attributes.speed)
+  to_hit!: vars.hero.level + bonus(attributes.accuracy)
+  damage!: max(1, from_gear("damage") + bonus(attributes.might))
+
+resistances:
+  fire!: from_gear("fire") + bonus(attributes.luck)
+  water!: from_gear("water") + bonus(attributes.luck)
+  mind!: from_gear("mind") + bonus(attributes.personality)
+
+rank!: if vars.hero.level >= 10 then "Veteran" else "Novice"
+summary: "{{ vars.hero.name }}, {{ rank }} {{ vars.hero.class }} of level {{ vars.hero.level }}"
+
+skills:
+  - name: Strike
+    damage!: stats.damage
+  - name: Shield Wall
+    $if!: vars.hero.class = "knight" and vars.hero.level >= 5
+  - name: Aimed Shot
+    to_hit!: stats.to_hit + 4
+    $if!: vars.hero.class = "archer"
+  - name: Heal
+    restores!: 5 + bonus(attributes.personality) * 2
+    cost: 3
+    $if!: vars.hero.class = "cleric"
+  - name: Fireball
+    damage!: bonus(attributes.intellect) * vars.hero.level
+    cost: 8
+    $if!: vars.hero.class = "sorcerer" and stats.spell_points >= 8
+  - name: Lucky Dodge
+    $if!: attributes.luck >= 16

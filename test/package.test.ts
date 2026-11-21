@@ -55,7 +55,7 @@ describe('the built package', () => {
   test('bun imports "scripted-yaml" by name too', async () => {
     const name = 'scripted-yaml';
     const built = await import(name);
-    expect(await new built.ScriptedYaml().validate('a!: 1 + 1\n')).toEqual([]);
+    expect(await new built.ScriptedYaml().validateText('a!: 1 + 1\n')).toEqual([]);
     expect(import.meta.resolve('scripted-yaml')).toEndWith('/dist/index.js');
   });
 

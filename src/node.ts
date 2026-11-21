@@ -24,6 +24,27 @@ export class Key {
   }
 }
 
+/** The key of a function: `from_gear(wanted)` is the name `from_gear` and the parameter `wanted`. */
+export class Signature {
+  readonly name: string;
+  /** undefined when the key has no brackets: the value is then a whole FEEL `function(…) …`. */
+  readonly parameters: string[] | undefined;
+
+  constructor(key: string) {
+    const open = key.indexOf('(');
+    const short = open > 0 && key.endsWith(')');
+    this.name = short ? key.slice(0, open).trim() : key;
+    this.parameters = short
+      ? key.slice(open + 1, -1).split(',').map((parameter) => parameter.trim()).filter((parameter) => parameter !== '')
+      : undefined;
+  }
+
+  /** The FEEL function definition for a body written without one. */
+  define(body: string): string {
+    return `function(${this.parameters!.join(', ')}) ${body}`;
+  }
+}
+
 /** A value in the file, with the place it was written. */
 export abstract class Node implements Located {
   /** The map or list that holds this node. */
@@ -91,6 +112,8 @@ export class Entry implements Located {
   base?: Entry;
   /** What the marker function returned, once the file is loaded. */
   marked?: { value: unknown };
+  /** The formula as `feelin` gets it, when that is not the text written: a function whose parameters are in its key. */
+  formula?: string;
 
   constructor(
     raw: string,

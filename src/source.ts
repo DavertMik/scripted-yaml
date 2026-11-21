@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, extname, join, resolve } from 'node:path';
 import { Importer, ImportFailed, ImportSpec } from './importers.js';
-import { type Entry, MapNode, type Node, ScalarNode } from './node.js';
+import { type Entry, MapNode, type Node, ScalarNode, Signature } from './node.js';
 import { Patch } from './patch.js';
 import type { Problems } from './problem.js';
 import { SourceReader } from './reader.js';
@@ -48,10 +48,15 @@ export class Source {
 
   private readFunctions(node: Node | undefined): void {
     if (!node) return;
-    if (!(node instanceof MapNode)) return this.problems.error(node, '$functions must be a map: name!: function(parameter) formula');
+    if (!(node instanceof MapNode)) return this.problems.error(node, '$functions must be a map: name(parameter)!: formula');
     for (const entry of node.entries) {
-      if (entry.key.kind === 'formula') this.functions.set(entry.name, entry);
-      else this.problems.error(entry, `a function is a formula: write "${entry.name}!: function(…) …"`);
+      const signature = new Signature(entry.name);
+      if (entry.key.kind !== 'formula') {
+        this.problems.error(entry, `a function is a formula: write "${signature.name}(…)!: …"`);
+        continue;
+      }
+      if (signature.parameters && entry.value instanceof ScalarNode) entry.formula = signature.define(entry.value.source);
+      this.functions.set(signature.name, entry);
     }
   }
 

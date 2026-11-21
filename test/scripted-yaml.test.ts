@@ -31,12 +31,12 @@ local!: vars.REMOTE = null
 title: Tests on {{ name }}
 run!sh: npm test
 `;
-    expect(await scripted().validate(text, { file: 'demo.yml' })).toEqual([]);
+    expect(await scripted().validateText(text, { file: 'demo.yml' })).toEqual([]);
   });
 
   test('reports file, line, key and message', async () => {
     const text = 'name: demo\nstage:\n  run!bash: npm test\n';
-    const [problem] = await scripted().validate(text, { file: 'demo.yml' });
+    const [problem] = await scripted().validateText(text, { file: 'demo.yml' });
     expect(problem).toBeInstanceOf(Problem);
     expect(problem!.file).toBe('demo.yml');
     expect(problem!.line).toBe(3);
@@ -47,70 +47,82 @@ run!sh: npm test
   });
 
   test('invalid YAML is a problem, not an exception', async () => {
-    const problems = await scripted().validate('a: [1, 2\nb: 3\n', { file: 'bad.yml' });
+    const problems = await scripted().validateText('a: [1, 2\nb: 3\n', { file: 'bad.yml' });
     expect(errors(problems).length).toBeGreaterThan(0);
   });
 
   test('duplicate keys are an error', async () => {
-    expect(errors(await scripted().validate('a: 1\na: 2\n', { file: 'x.yml' })).length).toBe(1);
+    expect(errors(await scripted().validateText('a: 1\na: 2\n', { file: 'x.yml' })).length).toBe(1);
   });
 
   test('a formula that is not valid FEEL', async () => {
-    const [problem] = errors(await scripted().validate('a: 1\nb!: a ==\n', { file: 'x.yml' }));
+    const [problem] = errors(await scripted().validateText('a: 1\nb!: a ==\n', { file: 'x.yml' }));
     expect(problem!.line).toBe(2);
     expect(problem!.key).toBe('b!');
   });
 
   test('a text template that is not valid FEEL', async () => {
-    const problems = errors(await scripted().validate('a: 1\ntitle: Total {{ a + }}\n', { file: 'x.yml' }));
+    const problems = errors(await scripted().validateText('a: 1\ntitle: Total {{ a + }}\n', { file: 'x.yml' }));
     expect(problems.length).toBe(1);
     expect(problems[0]!.key).toBe('title');
   });
 
   test('an unknown name in a formula', async () => {
-    const [problem] = errors(await scripted().validate('total: 5\nbig!: totl > 3\n', { file: 'x.yml' }));
+    const [problem] = errors(await scripted().validateText('total: 5\nbig!: totl > 3\n', { file: 'x.yml' }));
     expect(problem!.message).toContain('totl');
   });
 
   test('key and key! together', async () => {
-    expect(errors(await scripted().validate('a: 1\na!: 2\n', { file: 'x.yml' })).length).toBe(1);
+    expect(errors(await scripted().validateText('a: 1\na!: 2\n', { file: 'x.yml' })).length).toBe(1);
   });
 
   test('an unknown $keyword', async () => {
-    const [problem] = errors(await scripted().validate('$varz:\n  A: {}\n', { file: 'x.yml' }));
+    const [problem] = errors(await scripted().validateText('$varz:\n  A: {}\n', { file: 'x.yml' }));
     expect(problem!.message).toContain('$varz');
   });
 
   test('a variable that is read but not declared is a warning', async () => {
-    const problems = await scripted().validate('ci!: vars.CI = null\n', { file: 'x.yml' });
+    const problems = await scripted().validateText('ci!: vars.CI = null\n', { file: 'x.yml' });
     expect(problems.map((problem) => problem.severity)).toEqual(['warning']);
   });
 
   test('a key that reads itself through others', async () => {
-    expect(errors(await scripted().validate('a!: b + 1\nb!: a + 1\n', { file: 'x.yml' })).length).toBeGreaterThan(0);
+    expect(errors(await scripted().validateText('a!: b + 1\nb!: a + 1\n', { file: 'x.yml' })).length).toBeGreaterThan(0);
   });
 
   test('runs nothing: no marker function is called', async () => {
     let called = 0;
     const checker = new ScriptedYaml({ markers: { sh: () => called++ } });
-    await checker.validate('run!sh: rm -rf /\n', { file: 'x.yml' });
+    await checker.validateText('run!sh: rm -rf /\n', { file: 'x.yml' });
     expect(called).toBe(0);
   });
 
   test('markers may be given by name only', async () => {
     const checker = new ScriptedYaml({ markers: ['sh'] });
-    expect(await checker.validate('run!sh: npm test\n', { file: 'x.yml' })).toEqual([]);
+    expect(await checker.validateText('run!sh: npm test\n', { file: 'x.yml' })).toEqual([]);
   });
 
   test('an import of an unknown kind of file', async () => {
     const text = '$import:\n  ./data.csv: rows\n';
-    const problems = errors(await scripted().validate(text, { file: join(fixtures, 'x.yml') }));
+    const problems = errors(await scripted().validateText(text, { file: join(fixtures, 'x.yml') }));
     expect(problems.length).toBeGreaterThan(0);
     expect(problems[0]!.message).toContain('csv');
   });
 });
 
-describe('parse and load', () => {
+describe('validate a file', () => {
+  test('validate(path) reads the file, like load(path)', async () => {
+    expect(await scripted().validate(join(examples, 'pipelines/web-testing.yml'))).toEqual([]);
+  });
+
+  test('a file that cannot be read is a problem, not an exception', async () => {
+    const problems = await scripted().validate(join(fixtures, 'no-such-file.yml'));
+    expect(errors(problems).length).toBe(1);
+    expect(problems[0]!.file).toContain('no-such-file.yml');
+  });
+});
+
+describe('load and loadText', () => {
   const text = `
 name: demo
 $vars:
@@ -121,7 +133,7 @@ run!sh: echo "\${HOME}" {{ not ours }}
 `;
 
   test('nothing is computed; markers are applied; key names lose their marker', async () => {
-    const document = await scripted().parse(text, { file: 'demo.yml' });
+    const document = await scripted().loadText(text, { file: 'demo.yml' });
     expect(document.data.name).toBe('demo');
     expect(document.data.ready).toBeInstanceOf(Formula);
     expect(document.data.ready.source).toBe('vars.URL != null');
@@ -134,13 +146,13 @@ run!sh: echo "\${HOME}" {{ not ours }}
   });
 
   test('a file with errors throws ValidationFailed carrying the problems', async () => {
-    const failure = await scripted().parse('run!bash: x\n', { file: 'x.yml' }).catch((error) => error);
+    const failure = await scripted().loadText('run!bash: x\n', { file: 'x.yml' }).catch((error) => error);
     expect(failure).toBeInstanceOf(ValidationFailed);
     expect(failure.problems[0]).toBeInstanceOf(Problem);
   });
 
   test('parse accepts data that is already parsed', async () => {
-    const document = await scripted().parse({ name: 'demo', 'big!': '2 > 1', 'run!sh': 'ls' }, { file: 'demo.md' });
+    const document = await scripted().loadText({ name: 'demo', 'big!': '2 > 1', 'run!sh': 'ls' }, { file: 'demo.md' });
     expect(document.data.big).toBeInstanceOf(Formula);
     expect(document.data.run).toBeInstanceOf(ShellCommand);
   });
@@ -152,7 +164,7 @@ run!sh: echo "\${HOME}" {{ not ours }}
   });
 
   test('a path that does not exist is a problem on the line that names it', async () => {
-    const failure = await scripted().parse('name: x\n$dsl: ./nope.dsl.yml\n', { file: join(fixtures, 'x.yml') }).catch((error) => error);
+    const failure = await scripted().loadText('name: x\n$dsl: ./nope.dsl.yml\n', { file: join(fixtures, 'x.yml') }).catch((error) => error);
     expect(failure).toBeInstanceOf(ValidationFailed);
     expect(failure.problems[0].line).toBe(2);
   });
@@ -160,7 +172,7 @@ run!sh: echo "\${HOME}" {{ not ours }}
 
 describe('resolve', () => {
   test('all variables in, all values out, as plain data', async () => {
-    const document = await scripted().parse(
+    const document = await scripted().loadText(
       `
 $vars:
   URL: { optional: true }
@@ -180,12 +192,12 @@ limit!: if ready then 30 else 10
   });
 
   test('an empty variable is null', async () => {
-    const document = await scripted().parse('$vars:\n  REMOTE: { optional: true }\nlocal!: vars.REMOTE = null\n', { file: 'x.yml' });
+    const document = await scripted().loadText('$vars:\n  REMOTE: { optional: true }\nlocal!: vars.REMOTE = null\n', { file: 'x.yml' });
     expect((await document.resolve({ vars: { REMOTE: '' } })).local).toBe(true);
   });
 
   test('missing required variables are all listed, before anything is computed', async () => {
-    const document = await scripted().parse('$vars:\n  FIRST_NEEDED: {}\n  SECOND_NEEDED: {}\n  NOT_NEEDED: { optional: true }\nsum!: vars.FIRST_NEEDED + vars.SECOND_NEEDED\n', { file: 'x.yml' });
+    const document = await scripted().loadText('$vars:\n  FIRST_NEEDED: {}\n  SECOND_NEEDED: {}\n  NOT_NEEDED: { optional: true }\nsum!: vars.FIRST_NEEDED + vars.SECOND_NEEDED\n', { file: 'x.yml' });
     const failure = await document.resolve({ vars: {} }).catch((error) => error);
     expect(failure).toBeInstanceOf(ResolveFailed);
     expect(failure.message).toContain('FIRST_NEEDED');
@@ -194,7 +206,7 @@ limit!: if ready then 30 else 10
   });
 
   test('$value: a formula that reads the node gets its value; other keys stay beside it', async () => {
-    const document = await scripted().parse(
+    const document = await scripted().loadText(
       `
 $vars:
   REMOTE: { optional: true }
@@ -212,12 +224,12 @@ when!: prerequisites.local
   });
 
   test('keys are definitions: order in the file means nothing', async () => {
-    const document = await scripted().parse('total!: price * qty\nprice: 4\nqty!: start + 1\nstart: 2\n', { file: 'x.yml' });
+    const document = await scripted().loadText('total!: price * qty\nprice: 4\nqty!: start + 1\nstart: 2\n', { file: 'x.yml' });
     expect((await document.resolve({ vars: {} })).total).toBe(12);
   });
 
   test('a marker value is asked for only when a formula reads it; "1" is true and "0" is false', async () => {
-    const document = await scripted().parse(
+    const document = await scripted().loadText(
       `
 prerequisites:
   browser:
@@ -238,7 +250,7 @@ run!sh: npx explorbot
   });
 
   test('$functions are FEEL functions', async () => {
-    const document = await scripted().parse(
+    const document = await scripted().loadText(
       `
 $functions:
   inCart!: function(wanted) items[category = wanted]
@@ -253,7 +265,7 @@ books!: inCart("books").name
   });
 
   test('$if, $unless and $each change the shape of the result', async () => {
-    const document = await scripted().parse(
+    const document = await scripted().loadText(
       `
 $vars:
   vip: {}
@@ -275,7 +287,7 @@ shipping:
   });
 
   test('a FEEL warning is an error that names the key', async () => {
-    const document = await scripted().parse('$vars:\n  cart: {}\nbig!: vars.cart.subtotl > 100\n', { file: 'x.yml' });
+    const document = await scripted().loadText('$vars:\n  cart: {}\nbig!: vars.cart.subtotl > 100\n', { file: 'x.yml' });
     const failure = await document.resolve({ vars: { cart: { subtotal: 120 } } }).catch((error) => error);
     expect(failure).toBeInstanceOf(ResolveFailed);
     expect(failure.message).toContain('big');
@@ -286,7 +298,7 @@ describe('$import', () => {
   const file = join(fixtures, 'importing.yml');
 
   test('a module gives functions, a YAML file gives data, a Markdown file gives a query function', async () => {
-    const document = await scripted().parse(
+    const document = await scripted().loadText(
       `
 $import:
   ./host.ts: [fileExists, double]
@@ -305,20 +317,20 @@ title!: book("h1")
   });
 
   test('an async function is refused when the module is imported', async () => {
-    const failure = await scripted().parse('$import:\n  ./host.ts: [slow]\nx!: slow(1)\n', { file }).catch((error) => error);
+    const failure = await scripted().loadText('$import:\n  ./host.ts: [slow]\nx!: slow(1)\n', { file }).catch((error) => error);
     expect(failure).toBeInstanceOf(Error);
     expect(failure.message).toContain('slow');
   });
 
   test('a function that returns a promise is refused when the formula runs', async () => {
-    const document = await scripted().parse('$import:\n  ./host.ts: [promised]\nx!: promised(1)\n', { file });
+    const document = await scripted().loadText('$import:\n  ./host.ts: [promised]\nx!: promised(1)\n', { file });
     const failure = await document.resolve({ vars: {} }).catch((error) => error);
     expect(failure).toBeInstanceOf(ResolveFailed);
     expect(failure.message).toContain('promised');
   });
 
   test('a name the module does not export', async () => {
-    const failure = await scripted().parse('$import:\n  ./host.ts: [nope]\n', { file }).catch((error) => error);
+    const failure = await scripted().loadText('$import:\n  ./host.ts: [nope]\n', { file }).catch((error) => error);
     expect(failure).toBeInstanceOf(Error);
     expect(failure.message).toContain('nope');
   });
@@ -350,12 +362,12 @@ $schema:
 
   test('a file that fits', async () => {
     const text = `${schema}name: demo\ntarget: pr\nstages:\n  - { id: a, title: A }\n`;
-    expect(await scripted().validate(text, { file: 'x.yml' })).toEqual([]);
+    expect(await scripted().validateText(text, { file: 'x.yml' })).toEqual([]);
   });
 
   test('a missing field and a word outside its type are errors; an unlisted key is a warning', async () => {
     const text = `${schema}name: demo\ntarget: branch\ncolour: red\nstages:\n  - { id: a }\n`;
-    const problems = await scripted().validate(text, { file: 'x.yml' });
+    const problems = await scripted().validateText(text, { file: 'x.yml' });
     expect(errors(problems).length).toBe(2);
     expect(problems.filter((problem) => problem.severity === 'warning').length).toBe(1);
   });

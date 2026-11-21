@@ -4,8 +4,8 @@ $vars:
   cities:   { default: [] }
 
 $functions:
-  inCart!: function(wanted) vars.cart.items[category = wanted]
-  total!: function(items) sum(append(items.price, 0))
+  inCart(wanted)!: vars.cart.items[category = wanted]
+  total(items)!: sum(append(items.price, 0))
 
 is_vip!: count(vars.customer.orders) >= 10 or "vip" in vars.customer.tags
 

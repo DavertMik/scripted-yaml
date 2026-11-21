@@ -1,0 +1,24 @@
+# Shop: who gets a discount, what is left to pay, which shipping options are offered.
+
+$vars:
+  cart:     { about: The order. Its subtotal is used here. }
+  customer: { about: The buyer. Past orders and tags. }
+
+is_vip!: count(vars.customer.orders) >= 10 or "vip" in vars.customer.tags
+
+discount:
+  loyalty!: if is_vip then vars.cart.subtotal * 0.05 else 0
+  volume!: if vars.cart.subtotal >= 200 then 15 else 0
+  $value!: max(loyalty, volume)
+  note: The bigger of the two discounts applies.
+
+to_pay!: vars.cart.subtotal - discount
+
+shipping:
+  - name: Standard
+    price!: if to_pay >= 50 then 0 else 4.90
+  - name: Express
+    price: 12.90
+    $if!: is_vip
+
+message: You pay {{ to_pay }} and save {{ discount }}.

@@ -16,10 +16,10 @@ today!: vars.today
 # Functions are written in FEEL. A parameter must not be named like a field of the items
 # it filters: inside [ ... ] the item's own "category" would win over a parameter "category".
 $functions:
-  inCart!: function(wanted) cart.items[category = wanted]
-  cheapest!: function(items, howMany) sublist(sort(items, function(a, b) a.price < b.price), 1, howMany)
+  inCart(wanted)!: cart.items[category = wanted]
+  cheapest(items, howMany)!: sublist(sort(items, function(a, b) a.price < b.price), 1, howMany)
   # sum of an empty list is null in FEEL, so a zero is added: a cart without books still gets a number.
-  total!: function(items) sum(append(items.price, 0))
+  total(items)!: sum(append(items.price, 0))
 
 settings:
   currency: EUR

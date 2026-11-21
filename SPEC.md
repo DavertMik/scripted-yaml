@@ -222,13 +222,15 @@ $vars:
 Besides FEEL's built-ins, a formula may call a function the file defines or
 one it imports. There is no third source.
 
-**`$functions`** defines helpers in the file, as FEEL function definitions.
-The key is only the name; the parameters are part of the formula.
+**`$functions`** defines helpers in the file. The key is the name with its
+parameters in brackets; the value is the formula. The library splits the key
+at `(`, `,` and `)` and hands `feelin` the FEEL definition
+`function(wanted) …`. The long form, `inCart!: function(wanted) …`, works too.
 
 ```yaml
 $functions:
-  inCart!: function(wanted) cart.items[category = wanted]
-  total!: function(items) sum(items.price)
+  inCart(wanted)!: cart.items[category = wanted]
+  total(items)!: sum(items.price)
 ```
 
 A parameter must not have the name of a field of the items it filters:
@@ -487,14 +489,15 @@ relative to the file it is written in:
 A file reached this way goes through the same validation as the first one,
 and a path that does not exist is a problem reported on the line that names it.
 
-### 7.2 Validating: `validate`
+### 7.2 Validating: `validate` and `validateText`
 
 Validation is its own call. It needs no values and runs nothing: no marker
 function, no formula, no import. It takes text, so it works on a file from
 disk, a form field or a database row, and it can run in a Cloudflare Worker.
 
 ```ts
-const problems = await scripted.validate(text, { file: 'pipelines/web-testing.yml' });
+const problems = await scripted.validate('pipelines/web-testing.yml');                       // a file
+const problems = await scripted.validateText(text, { file: 'pipelines/web-testing.yml' });  // text that is not in a file
 
 for (const problem of problems) console.log(problem.toString());
 // pipelines/web-testing.yml:14  prerequisites.staging.$value!  unknown name "var"; did you mean "vars"?
@@ -542,11 +545,11 @@ return. Those surface when the file is loaded, or when the application
 runs what the marker produced. It also does not open imported files, so it
 does not know whether `./controllers.ts` really exports `Users`.
 
-### 7.3 Loading: `parse` and `load`
+### 7.3 Loading: `load` and `loadText`
 
 ```ts
-const document = await scripted.parse(text, { file: 'pipelines/web-testing.yml' });   // text, or data already parsed
-const document = await scripted.load('pipelines/web-testing.yml');     // reads the file, then parses
+const document = await scripted.load('pipelines/web-testing.yml');                             // a file
+const document = await scripted.loadText(text, { file: 'pipelines/web-testing.yml' });       // text, or data already parsed
 ```
 
 Both validate first and throw `ValidationFailed`, carrying the `problems`,
@@ -722,8 +725,8 @@ class Pipelines {
     markers: { sh: (source: string) => new ShellCommand(source) },
   });
 
-  validate(text: string, file: string) {
-    return this.scripted.validate(text, { file });
+  validate(name: string) {
+    return this.scripted.validate(`pipelines/${name}.yml`);
   }
 
   load(name: string) {
@@ -780,7 +783,7 @@ The hub checks a pipeline a user typed, with marker names only:
 
 ```ts
 const checker = new ScriptedYaml({ markers: ['sh'] });
-const problems = await checker.validate(request.body, { file: 'my-pipeline.yml' });
+const problems = await checker.validateText(request.body, { file: 'my-pipeline.yml' });
 ```
 
 ## 9. Example: Markdown with front matter
@@ -843,11 +846,11 @@ const scripted = new ScriptedYaml({
   markers: { mdq: (selector) => markdown.query(selector).text() },
 });
 
-const pipeline = await scripted.parse(markdown.frontmatter(), { file: 'web-testing.md' });
+const pipeline = await scripted.loadText(markdown.frontmatter(), { file: 'web-testing.md' });
 ```
 
 `markdown.frontmatter()` is the YAML block as data, already parsed by
-`mdq-cli`, so `parse` accepts data as well as text. Problems found in data
+`mdq-cli`, so `loadText` accepts data as well as text. Problems found in data
 are reported by key, without a line number.
 
 The value of a `!mdq` key is the Markdown its selector picks, as text.

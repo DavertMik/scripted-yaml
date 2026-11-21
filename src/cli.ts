@@ -100,7 +100,7 @@ class ValidateCommand extends Command {
     for (const file of args.files) {
       let lines: string[];
       try {
-        const problems = await scripted.validate(this.read(file), { file });
+        const problems = await scripted.validateText(this.read(file), { file });
         failed ||= problems.some((problem) => problem.severity === 'error');
         lines = problems.length > 0 ? problems.map((problem) => this.line(problem)) : [`ok       ${file}`];
       } catch (error) {
@@ -123,7 +123,7 @@ class ParseCommand extends Command {
     const markers: Record<string, Marker> = {};
     for (const name of args.markers) markers[name] = (source) => new MarkedValue(name, source);
     try {
-      const document = await new ScriptedYaml({ markers }).parse(this.read(file), { file });
+      const document = await new ScriptedYaml({ markers }).loadText(this.read(file), { file });
       console.log(JSON.stringify(await document.resolve({ vars }), null, 2));
       return 0;
     } catch (error) {

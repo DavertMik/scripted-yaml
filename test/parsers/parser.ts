@@ -22,7 +22,7 @@ export abstract class Parser<Result, Vars = Record<string, unknown>> {
   /** Checks a file without running anything: markers are given by name only. */
   async validate(file: string): Promise<Problem[]> {
     const { input, markers } = await this.open(file);
-    return new ScriptedYaml({ markers: Object.keys(markers) }).validate(input, { file });
+    return new ScriptedYaml({ markers: Object.keys(markers) }).validateText(input, { file });
   }
 
   /** What to hand to scripted-yaml for a file. A YAML file is handed over as text. */
@@ -33,6 +33,6 @@ export abstract class Parser<Result, Vars = Record<string, unknown>> {
   /** The loaded document: validated, markers applied, nothing computed. */
   protected async load(file: string): Promise<Document> {
     const { input, markers } = await this.open(file);
-    return new ScriptedYaml({ markers }).parse(input, { file });
+    return new ScriptedYaml({ markers }).loadText(input, { file });
   }
 }

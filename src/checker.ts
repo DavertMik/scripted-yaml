@@ -108,7 +108,7 @@ export class Checker {
   }
 
   private formula(entry: Entry): void {
-    if (entry.value instanceof ScalarNode) this.expression(entry.value, new Formula(entry.value.source), entry);
+    if (entry.value instanceof ScalarNode) this.expression(entry.value, new Formula(entry.formula ?? entry.value.source), entry);
     else this.problems.error(entry, `"${entry.key.raw}" is a formula, so its value is text; for data, remove the "!"`);
   }
 

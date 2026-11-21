@@ -1,0 +1,38 @@
+# UI: one description of a screen; parts appear, disappear or change with the user and the plan.
+
+$vars:
+  user:  { optional: true, about: The signed-in user. Null when signed out. }
+  plan:  { default: free }
+  flags: { default: [] }
+
+signed_in!: vars.user != null
+is_admin!: if signed_in then vars.user.role = "admin" else false
+paid!: vars.plan != "free"
+
+header:
+  title: Dashboard
+  greeting!: if signed_in then "Welcome back, " + vars.user.name else "Welcome"
+
+sidebar:
+  - label: Home
+    icon: home
+  - label: Reports
+    icon: chart
+    $if!: paid
+  - label: Upgrade
+    icon: star
+    action!js: openCheckout()
+    $unless!: paid
+  - label: Admin
+    icon: shield
+    $if!: is_admin
+  - $each!: vars.flags
+    $as: flag
+    label: Beta {{ flag }}
+    icon: flask
+
+theme:
+  accent: blue
+  $when:
+    - $if!: paid
+      accent: gold

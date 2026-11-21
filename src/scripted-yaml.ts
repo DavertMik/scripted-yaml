@@ -19,7 +19,7 @@ export interface FileOptions {
   file?: string;
 }
 
-/** Validates, parses and loads scripted-yaml files. It computes nothing: see `Document.resolve`. */
+/** Validates and loads scripted-yaml files. It computes nothing: see `Document.resolve`. */
 export class ScriptedYaml {
   private readonly markers: Record<string, Marker | undefined> = {};
 
@@ -28,19 +28,29 @@ export class ScriptedYaml {
     else Object.assign(this.markers, options.markers);
   }
 
-  /** Checks text (or data already parsed) and returns the problems. Runs nothing: no marker function, no formula, no import. */
-  async validate(input: unknown, options: FileOptions = {}): Promise<Problem[]> {
+  /** Checks a file and returns the problems. Runs nothing: no marker function, no formula, no import. */
+  async validate(path: string): Promise<Problem[]> {
+    try {
+      return this.validateText(this.readFile(path), { file: path });
+    } catch (error) {
+      if (error instanceof ValidationFailed) return error.problems;
+      throw error;
+    }
+  }
+
+  /** The same check for text that is not in a file (or data already parsed). `file` names it in the problems. */
+  async validateText(input: unknown, options: FileOptions = {}): Promise<Problem[]> {
     return this.check(input, options.file ?? '(text)').problems.list;
   }
 
-  /** Validates, then applies `$extends`, loads each `$import` and calls each marker's function. No formula is computed. */
-  async parse(input: unknown, options: FileOptions = {}): Promise<Document> {
-    return this.open(input, options.file ?? '(text)', []);
+  /** Reads a file, validates it, applies `$extends`, loads each `$import` and calls each marker's function. No formula is computed. */
+  async load(path: string): Promise<Document> {
+    return this.loadText(this.readFile(path), { file: path });
   }
 
-  /** Reads a file, then parses it. */
-  async load(path: string): Promise<Document> {
-    return this.open(this.readFile(path), path, []);
+  /** The same for text that is not in a file (or data already parsed). */
+  async loadText(input: unknown, options: FileOptions = {}): Promise<Document> {
+    return this.open(input, options.file ?? '(text)', []);
   }
 
   private check(input: unknown, file: string): { source: Source | undefined; problems: Problems } {

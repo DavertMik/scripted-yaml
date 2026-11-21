@@ -125,8 +125,8 @@ $vars:
   cities:   { default: [] }
 
 $functions:
-  inCart!: function(wanted) vars.cart.items[category = wanted]
-  total!: function(items) sum(append(items.price, 0))
+  inCart(wanted)!: vars.cart.items[category = wanted]
+  total(items)!: sum(append(items.price, 0))
 
 is_vip!: count(vars.customer.orders) >= 10 or "vip" in vars.customer.tags
 
@@ -176,7 +176,7 @@ $tests:
       checkout.payment_methods: [card, paypal]
 ```
 
-- **`$functions`**: `name!: function(parameters) formula`. Not the name of a FEEL built-in or of a key.
+- **`$functions`**: `name(parameters)!: formula`. Not the name of a FEEL built-in or of a key.
 - **`$if!` / `$unless!`** keep or drop the list item or map they sit in. They must give true or false.
 - **`$each!`** repeats a list item per value, named by `$as`; `$if!` beside it is checked per value.
 - **`$when`** changes keys of its map: every matching case applies, in order; `$else` when none did.

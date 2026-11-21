@@ -19,7 +19,7 @@ class Command {
 }
 
 const scripted = new ScriptedYaml({ markers: { sh: (source: string) => new Command(source) } });
-const validate = (name: string) => scripted.validate(read(name), { file: join(examples, name) });
+const validate = (name: string) => scripted.validateText(read(name), { file: join(examples, name) });
 const cli = (...args: string[]) => {
   const run = Bun.spawnSync(['bun', join(import.meta.dir, '../src/cli.ts'), ...args], { cwd: examples });
   return { code: run.exitCode, out: run.stdout.toString() };
@@ -66,7 +66,7 @@ describe('skills/scripted-yaml/SKILL.md', () => {
   });
 
   test('pipeline.yml: the plan stage runs with a staging URL; the command is asked for by the second condition only', async () => {
-    const document = await scripted.parse(read('pipeline.yml'), { file: join(examples, 'pipeline.yml') });
+    const document = await scripted.loadText(read('pipeline.yml'), { file: join(examples, 'pipeline.yml') });
     const result = await document.resolve({ vars: { STAGING_URL: 'https://staging.example.com' } });
     expect(result.timeout).toBe('10m');
     expect(result.stages[0]).toEqual({ id: 'plan', title: 'Plan for main', when: true, task: 'Write a test plan for https://staging.example.com in plan.md.' });
@@ -76,7 +76,7 @@ describe('skills/scripted-yaml/SKILL.md', () => {
   });
 
   test('shop.yml: its own $tests pass, and a big order changes the payment methods', async () => {
-    const document = await scripted.parse(read('shop.yml'), { file: join(examples, 'shop.yml') });
+    const document = await scripted.loadText(read('shop.yml'), { file: join(examples, 'shop.yml') });
     expect((await document.test()).map((result) => result.failures)).toEqual([[]]);
     const result = await document.resolve({ vars: { customer: { orders: [], tags: [] }, cart: { subtotal: 1200, items: [] } } });
     expect(result.discount).toEqual({ loyalty: 0, books: 0, $value: 0, note: 'The bigger of the two discounts applies.' });
@@ -85,7 +85,7 @@ describe('skills/scripted-yaml/SKILL.md', () => {
   });
 
   test('team.yml: a list item is read by the field its schema names', async () => {
-    const document = await scripted.parse(read('team.yml'), { file: join(examples, 'team.yml') });
+    const document = await scripted.loadText(read('team.yml'), { file: join(examples, 'team.yml') });
     expect((await document.resolve()).lead).toBe('reviewer');
   });
 

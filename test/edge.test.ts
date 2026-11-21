@@ -27,10 +27,10 @@ const scripted = () =>
       },
     },
   });
-const problemsOf = (text: string, options = { file: 'x.yml' }) => scripted().validate(text, options);
+const problemsOf = (text: string, options = { file: 'x.yml' }) => scripted().validateText(text, options);
 const errorsOf = async (text: string, options = { file: 'x.yml' }) => (await problemsOf(text, options)).filter((problem) => problem.severity === 'error');
 const messages = (problems: Problem[]) => problems.map((problem) => problem.message).join('\n');
-const resolved = async (text: string, vars: Record<string, unknown> = {}, options = { file: 'x.yml' }) => (await scripted().parse(text, options)).resolve({ vars });
+const resolved = async (text: string, vars: Record<string, unknown> = {}, options = { file: 'x.yml' }) => (await scripted().loadText(text, options)).resolve({ vars });
 const failure = (promise: Promise<unknown>) => promise.then(() => undefined).catch((error) => error);
 
 describe('the shape of a file', () => {
@@ -52,7 +52,7 @@ describe('the shape of a file', () => {
   });
 
   test('null values stay null', async () => {
-    const document = await scripted().parse('a:\nb: ~\nc!: a = null\n', { file: 'x.yml' });
+    const document = await scripted().loadText('a:\nb: ~\nc!: a = null\n', { file: 'x.yml' });
     expect(document.data.a).toBeNull();
     expect(await document.resolve()).toEqual({ a: null, b: null, c: true });
   });
@@ -62,7 +62,7 @@ describe('the shape of a file', () => {
   });
 
   test('a formula that is a number in YAML is still a formula', async () => {
-    const document = await scripted().parse('two!: 2\n', { file: 'x.yml' });
+    const document = await scripted().loadText('two!: 2\n', { file: 'x.yml' });
     expect(document.data.two).toBeInstanceOf(Formula);
     expect(document.data.two.source).toBe('2');
     expect((await document.resolve()).two).toBe(2);
@@ -78,7 +78,7 @@ describe('the shape of a file', () => {
   });
 
   test('problems found in data have no line number', async () => {
-    const [problem] = await scripted().validate({ 'run!bash': 'x' }, { file: 'front.md' });
+    const [problem] = await scripted().validateText({ 'run!bash': 'x' }, { file: 'front.md' });
     expect(problem!.line).toBe(0);
     expect(problem!.toString()).toBe('front.md  run!bash  no function is registered for the marker "bash"');
   });
@@ -262,12 +262,12 @@ all_big!: every n in items satisfies n > 2
   });
 
   test('reads lists every name, once, as written', async () => {
-    const document = await scripted().parse('$vars:\n  A: { optional: true }\nb: { c: 1 }\nx!: if vars.A != null and b.c > 0 then b.c else count([vars.A])\n', { file: 'x.yml' });
+    const document = await scripted().loadText('$vars:\n  A: { optional: true }\nb: { c: 1 }\nx!: if vars.A != null and b.c > 0 then b.c else count([vars.A])\n', { file: 'x.yml' });
     expect(document.data.x.reads).toEqual(['vars.A', 'b.c']);
   });
 
   test('a text lists the names of all its blocks', async () => {
-    const document = await scripted().parse('a: 1\nb: 2\nt: "{{ a }} and {{ b }} and {{ a }}"\n', { file: 'x.yml' });
+    const document = await scripted().loadText('a: 1\nb: 2\nt: "{{ a }} and {{ b }} and {{ a }}"\n', { file: 'x.yml' });
     expect(document.data.t).toBeInstanceOf(Text);
     expect(document.data.t.reads).toEqual(['a', 'b']);
   });
@@ -383,7 +383,7 @@ describe('variables', () => {
     const text = '$vars:\n  STAGE_DIR: { host: true, optional: true }\n  RUN_ID: { host: true }\ndir!: vars.STAGE_DIR\n';
     expect((await failure(resolved(text))).message).toContain('RUN_ID');
     expect((await resolved(text, { RUN_ID: 7 })).dir).toBeNull();
-    const document = await scripted().parse(text, { file: 'x.yml' });
+    const document = await scripted().loadText(text, { file: 'x.yml' });
     expect(document.variables.map((variable) => [variable.name, variable.host, variable.required])).toEqual([
       ['STAGE_DIR', true, false],
       ['RUN_ID', true, true],
@@ -391,12 +391,12 @@ describe('variables', () => {
   });
 
   test('the document lists its variables', async () => {
-    const document = await scripted().parse('$vars:\n  KEY: { optional: true, secret: true, about: The key. }\n', { file: 'x.yml' });
+    const document = await scripted().loadText('$vars:\n  KEY: { optional: true, secret: true, about: The key. }\n', { file: 'x.yml' });
     expect(document.variables.map((variable) => [variable.name, variable.secret, variable.required, variable.about])).toEqual([['KEY', true, false, 'The key.']]);
   });
 
   test('resolve does not change document.data, and can be called again', async () => {
-    const document = await scripted().parse('$vars:\n  N: {}\ndouble!: vars.N * 2\n', { file: 'x.yml' });
+    const document = await scripted().loadText('$vars:\n  N: {}\ndouble!: vars.N * 2\n', { file: 'x.yml' });
     expect((await document.resolve({ vars: { N: 2 } })).double).toBe(4);
     expect((await document.resolve({ vars: { N: 5 } })).double).toBe(10);
     expect(document.data.double).toBeInstanceOf(Formula);
@@ -405,7 +405,7 @@ describe('variables', () => {
 
 describe('markers', () => {
   test('a marker function that throws fails the load, with the key', async () => {
-    const error = await failure(scripted().parse('a:\n  run!boom: now\n', { file: 'x.yml' }));
+    const error = await failure(scripted().loadText('a:\n  run!boom: now\n', { file: 'x.yml' }));
     expect(error).toBeInstanceOf(ValidationFailed);
     expect(error.message).toContain('marker exploded');
     expect(error.problems[0].key).toBe('a.run!boom');
@@ -413,11 +413,11 @@ describe('markers', () => {
   });
 
   test('a marker function that returns undefined: the key is there, a formula reads null', async () => {
-    const document = await scripted().parse('gone!nothing: x\nis_gone!: gone = null\n', { file: 'x.yml' });
+    const document = await scripted().loadText('gone!nothing: x\nis_gone!: gone = null\n', { file: 'x.yml' });
     expect('gone' in document.data).toBe(true);
     expect(document.data.gone).toBeUndefined();
     expect(await document.resolve()).toEqual({ gone: null, is_gone: true });
-    const unread = await (await scripted().parse('gone!nothing: x\n', { file: 'x.yml' })).resolve();
+    const unread = await (await scripted().loadText('gone!nothing: x\n', { file: 'x.yml' })).resolve();
     expect('gone' in unread).toBe(true);
     expect(unread.gone).toBeUndefined();
   });
@@ -443,25 +443,25 @@ describe('markers', () => {
   test('a marked value may be a map or a list, handed over as data', async () => {
     const seen: unknown[] = [];
     const library = new ScriptedYaml({ markers: { keep: (source: unknown) => seen.push(source) } });
-    await library.parse('a!keep: { x: 1 }\nb!keep: [1, 2]\nc!keep: 7\n', { file: 'x.yml' });
+    await library.loadText('a!keep: { x: 1 }\nb!keep: [1, 2]\nc!keep: 7\n', { file: 'x.yml' });
     expect(seen).toEqual([{ x: 1 }, [1, 2], 7]);
   });
 
   test('the marker function gets the value and nothing else', async () => {
     const seen: unknown[][] = [];
     const library = new ScriptedYaml({ markers: { sh: (...args: unknown[]) => seen.push(args) } });
-    await library.parse('stages:\n  - id: a\n    run!sh: ls\n', { file: 'p.yml' });
+    await library.loadText('stages:\n  - id: a\n    run!sh: ls\n', { file: 'p.yml' });
     expect(seen).toEqual([['ls']]);
   });
 
   test('markers given by name only cannot load a file', async () => {
-    const error = await failure(new ScriptedYaml({ markers: ['sh'] }).parse('run!sh: ls\n', { file: 'x.yml' }));
+    const error = await failure(new ScriptedYaml({ markers: ['sh'] }).loadText('run!sh: ls\n', { file: 'x.yml' }));
     expect(error).toBeInstanceOf(ValidationFailed);
     expect(error.message).toContain('name only');
   });
 
   test('a library with no markers at all', async () => {
-    expect(await (await new ScriptedYaml().parse('a!: 1 + 1\n')).resolve()).toEqual({ a: 2 });
+    expect(await (await new ScriptedYaml().loadText('a!: 1 + 1\n')).resolve()).toEqual({ a: 2 });
   });
 });
 
