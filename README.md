@@ -14,22 +14,22 @@ flowchart TD
 - **Some code is too important to leave buried in generated implementation.** Pricing rules,
   RPG formulas, UI structure, and business processes determine what your application does.
   You need to read, understand, and change them yourself.
-- **Keep that code in editable text files.** Reordering a menu should mean moving a YAML item,
+- **Keep business rules in editable YAML specs.** Reordering a menu should mean moving a YAML item,
   not digging through React components. Changing character progression should mean editing
   a formula, not tracing it through the game engine.
-- **Have agents build around those files.** The YAML is part of the application code and
-  dictates its behavior—not documentation for an agent to translate into a second implementation.
-- **Reserve those files for manual control.** Tell agents to leave them alone while they work
+- **Have agents build around YAML specs.** YAML specs are part of the application code and
+  dictate its behavior—not documentation for an agent to translate into a second implementation.
+- **Reserve YAML specs for manual control.** Tell agents to leave YAML specs alone while working
   on rendering, plumbing, and integrations. You own the rules; agents handle the bulk of the implementation.
-
-YAML already gives you readable lists, groups, and multiline text. Scripted YAML keeps that
-format and adds enough scripting to express the rules alongside the configuration:
-
-- **Ordinary YAML stays ordinary YAML.** Use it for titles, wording, menu order, and grouping.
-- **Add logic where data alone is not enough.** Calculate discounts and character stats,
-  show elements conditionally, or repeat business-process steps from input data.
-- **Connect scripts through explicit handlers.** The application decides how to execute them;
-  formulas use FEEL, and text can include their results.
+- **Self-contained specs are easy to read and edit.** Keep inputs, data, and formulas together,
+  without external file dependencies unless explicitly declared through `$dsl`, `$import`, or `$extends`.
+- **Still YAML, with scripting sugar.** Keep readable lists, groups, and multiline text;
+  add FEEL formulas, conditions, and scripts executed through application handlers.
+- **Each YAML spec can choose its own DSL.** `$dsl: ./ui.dsl.yml` points to a separate file defining
+  the spec's validation structure. UI, business logic, validation rules, and access control can use
+  different DSLs in one project, all through the same `ScriptedYaml` API.
+- **Structure checking—like TypeScript for YAML.** A defined DSL checks required fields,
+  nested shapes, and allowed values. It validates the YAML, not how the application executes it.
 
 ## Small examples
 
@@ -71,13 +71,6 @@ $vars:
 discount!: if vars.subtotal >= 200 then vars.subtotal * 0.10 else 0
 message: You save {{ discount }}.
 ```
-
-## YAML, with scripting
-
-- No replacement configuration format: these are YAML files, parsed as YAML.
-- Formulas and conditions keep dynamic rules in the same file as static values.
-- Script markers pass their contents to handlers supplied by your application.
-- Validation, optional schemas, and embedded input/output tests help check what you edit.
 
 ## Install
 
