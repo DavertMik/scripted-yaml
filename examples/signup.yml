@@ -6,14 +6,40 @@ $replace:
   title: Sign up
   submit: Create account
   tabs:
-    - { id: account, label: Account }
-    - { id: profile, label: Profile }
+    - id: account
+      label: Account
+    - id: profile
+      label: Profile
   fields:
-    - { name: email, type: email, label: Email, tab: account, required: true, tooltip: We never share it. }
-    - { name: password, type: password, label: Password, tab: account, required: true, min: 8 }
-    - { name: confirm, type: password, label: Repeat the password, tab: account, required: true }
-    - { name: age, type: number, label: Age, tab: profile, min: 18, max: 120 }
-    - { name: plan, type: select, label: Plan, tab: profile, options: [free, team], required: true }
+    - name: email
+      type: email
+      label: Email
+      tab: account
+      required: true
+      tooltip: We never share it.
+    - name: password
+      type: password
+      label: Password
+      tab: account
+      required: true
+      min: 8
+    - name: confirm
+      type: password
+      label: Repeat the password
+      tab: account
+      required: true
+    - name: age
+      type: number
+      label: Age
+      tab: profile
+      min: 18
+      max: 120
+    - name: plan
+      type: select
+      label: Plan
+      tab: profile
+      options: [free, team]
+      required: true
     - name: company
       type: text
       label: Company

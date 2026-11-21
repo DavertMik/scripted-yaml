@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
-import { extname } from 'node:path';
+import { extname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { mdq } from 'mdq-cli';
 import { type Marker, type Problem, ScriptedYaml, ScriptedYamlError } from './index.js';
@@ -167,9 +167,20 @@ class TemplatesCommand extends Command {
   }
 }
 
+/** The name and version of the package, read from its package.json beside `dist/`. */
+class Product {
+  private readonly manifest = JSON.parse(readFileSync(join(import.meta.dirname, '../package.json'), 'utf8')) as { name: string; version: string };
+
+  toString(): string {
+    return `${this.manifest.name} ${this.manifest.version}`;
+  }
+}
+
 /** The `scripted-yaml` command line: validate files, print one file resolved, or install the agent skills. */
 class Cli {
   private readonly commands: Record<string, Command> = { validate: new ValidateCommand(), parse: new ParseCommand(), skill: new SkillCommand(), templates: new TemplatesCommand() };
+
+  private readonly product = new Product();
 
   get usage(): string {
     return [
@@ -184,6 +195,7 @@ class Cli {
       '  templates lists the base files of the package; a file builds on one with',
       '            $extends: scripted-yaml/<name>',
       '',
+      '  --version  prints the name and version; every command prints them first, on stderr',
       '  --markers  the marker names the files use (run!sh: is the marker "sh")',
       '             parse shows a marked value as { "marker": "sh", "source": "…" }',
       '  --var      one variable, as text; --vars reads variables from a JSON file',
@@ -192,6 +204,12 @@ class Cli {
 
   async run(argv: string[]): Promise<number> {
     const [name, ...rest] = argv;
+    if (name === '--version' || name === '-v') {
+      console.log(`${this.product}`);
+      return 0;
+    }
+    // Every run says what is running. On stderr, so the output of a command stays clean for a pipe.
+    console.error(`${this.product}`);
     if (name === '--help' || name === '-h') {
       console.log(this.usage);
       return 0;

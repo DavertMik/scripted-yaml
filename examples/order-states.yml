@@ -12,12 +12,26 @@ $vars:
 $replace:
   # One row per rule. `$if!` is the guard: a row whose guard fails is not there.
   transitions:
-    - { from: draft,   on: pay,     to: paid,      $if!: vars.order.total > 0 }
-    - { from: draft,   on: cancel,  to: cancelled }
-    - { from: paid,    on: ship,    to: shipped,   $if!: vars.order.in_stock }
-    - { from: paid,    on: cancel,  to: refunded }
-    - { from: shipped, on: deliver, to: delivered }
-    - { from: shipped, on: return,  to: refunded }
+    - from: draft
+      on: pay
+      to: paid
+      $if!: vars.order.total > 0
+    - from: draft
+      on: cancel
+      to: cancelled
+    - from: paid
+      on: ship
+      to: shipped
+      $if!: vars.order.in_stock
+    - from: paid
+      on: cancel
+      to: refunded
+    - from: shipped
+      on: deliver
+      to: delivered
+    - from: shipped
+      on: return
+      to: refunded
 
   # What the application does on a transition.
   effects:

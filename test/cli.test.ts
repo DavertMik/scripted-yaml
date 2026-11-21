@@ -184,3 +184,25 @@ describe('scripted-yaml templates', () => {
     expect(lines[2]).toContain('A state machine');
   });
 });
+
+describe('the name and version', () => {
+  const product = `scripted-yaml ${JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version}`;
+
+  test('every command prints them first, on stderr, and its output stays clean', () => {
+    for (const args of [['validate', 'good.yml', '--markers', 'sh'], ['parse', 'good.yml', '--markers', 'sh'], ['templates'], ['--help'], ['nonsense'], []]) {
+      const run = cli(...args);
+      expect(run.err.split('\n')[0]).toBe(product);
+      expect(run.out).not.toContain(product);
+    }
+    expect(() => JSON.parse(cli('parse', 'good.yml', '--markers', 'sh').out)).not.toThrow();
+  });
+
+  test('--version prints them alone', () => {
+    for (const flag of ['--version', '-v']) {
+      const run = cli(flag);
+      expect(run.out).toBe(`${product}\n`);
+      expect(run.err).toBe('');
+      expect(run.code).toBe(0);
+    }
+  });
+});

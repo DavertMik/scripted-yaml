@@ -4,14 +4,28 @@
 #   $replace:
 #     title: Sign up
 #     tabs:                                    leave out for a form of one page
-#       - { id: account, label: Account }
+#       - id: account
+#         label: Account
 #     fields:
-#       - { name: email, type: email, label: Email, tab: account, required: true, tooltip: We never share it. }
-#       - { name: age, type: number, min: 18 }            min and max: the number, or the length of a text
-#       - { name: plan, type: select, options: [free, team] }
-#       - { name: company, type: text, $if!: value("plan") = "team" }         shown to some
+#       - name: email
+#         type: email
+#         label: Email
+#         tab: account
+#         required: true
+#         tooltip: We never share it.
+#       - name: age
+#         type: number
+#         min: 18                              min and max: the number, or the length of a text
+#       - name: plan
+#         type: select
+#         options: [free, team]
+#       - name: company
+#         type: text
+#         $if!: value("plan") = "team"         shown to some
 #     rules:                                   checks across fields: the row is an error when `$if!` is true
-#       - { field: confirm, message: The passwords differ, $if!: value("confirm") != value("password") }
+#       - field: confirm
+#         message: The passwords differ
+#         $if!: value("confirm") != value("password")
 # The application passes `values`, by field name. `value("plan")` reads one: null while it is empty
 # or not passed, so the file resolves with no values at all, to draw the empty form.
 # A number may arrive as text ("42"), as a form sends it.

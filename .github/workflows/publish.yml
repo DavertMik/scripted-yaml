@@ -1,0 +1,44 @@
+# Publishes the package to npm when a GitHub release is published.
+# The release tag must be the version in package.json, with or without a leading "v".
+#
+# It signs in to npm by trusted publishing (OIDC): no token is stored. Set it up once on npmjs.com:
+# package scripted-yaml -> Settings -> Trusted Publisher -> GitHub Actions,
+# repository DavertMik/scripted-yaml, workflow file publish.yml.
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      # npm 11.5.1 or newer is needed for trusted publishing; Node 24 brings it.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: The tag is the version of package.json
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "${TAG#v}" != "$version" ]; then
+            echo "The release tag is $TAG, package.json says $version." >&2
+            exit 1
+          fi
+
+      - run: bun install
+
+      # `prepublishOnly` runs the type check, the tests and the build before anything is sent.
+      - run: npm publish --access public

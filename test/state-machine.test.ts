@@ -122,18 +122,18 @@ describe('validation of a state machine', () => {
   const problems = async (changed: string) => (await scripted.validateText(changed, { file: 'order-states.yml' })).map((problem) => `${problem.severity} ${problem}`);
 
   test('a transition to a state that does not exist', async () => {
-    expect(await problems(text.replace('to: shipped,', 'to: shiped,'))).toEqual([
-      'error order-states.yml:17  transitions[3].to  "shiped" is not one of: draft, paid, shipped, delivered, cancelled, refunded',
+    expect(await problems(text.replace('to: shipped\n', 'to: shiped\n'))).toEqual([
+      'error order-states.yml:24  transitions[3].to  "shiped" is not one of: draft, paid, shipped, delivered, cancelled, refunded',
     ]);
   });
 
   test('a transition from a state that does not exist', async () => {
-    const [problem] = await problems(text.replace('from: shipped, on: return', 'from: lost, on: return'));
+    const [problem] = await problems(text.replace('from: shipped\n      on: return', 'from: lost\n      on: return'));
     expect(problem).toContain('transitions[6].from  "lost" is not one of');
   });
 
   test('a transition without a target', async () => {
-    const [problem] = await problems(text.replace('on: deliver, to: delivered', 'on: deliver'));
+    const [problem] = await problems(text.replace('on: deliver\n      to: delivered', 'on: deliver'));
     expect(problem).toContain('transitions[5]  missing required field "to"');
   });
 

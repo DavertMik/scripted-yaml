@@ -7,15 +7,20 @@ $vars:
 
 $replace:
   menu:
-    - { label: Home, path: /, icon: home }
+    - label: Home
+      path: /
+      icon: home
     - label: Products
       items:
-        - { label: Phones, path: /products/phones }
+        - label: Phones
+          path: /products/phones
         - label: Laptops
           path: /products/laptops
           items:
-            - { label: Gaming, path: /products/laptops/gaming }
+            - label: Gaming
+              path: /products/laptops/gaming
     - label: Admin
       path: /admin
       $if!: vars.user != null and vars.user.role = "admin"
-    - { label: Docs, url: "https://docs.example.com" }
+    - label: Docs
+      url: "https://docs.example.com"

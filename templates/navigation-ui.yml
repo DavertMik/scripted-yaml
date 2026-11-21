@@ -3,12 +3,17 @@
 # Your file, after `$extends: scripted-yaml/navigation-ui`:
 #   $replace:
 #     menu:
-#       - { label: Home, path: / }
+#       - label: Home
+#         path: /
 #       - label: Products                      an item with `items` is a dropdown, up to three levels
 #         items:
-#           - { label: Phones, path: /products/phones }
-#       - { label: Admin, path: /admin, $if!: vars.user.role = "admin" }     shown to some
-#       - { label: Docs, url: "https://docs.example.com" }                   a link out: not a page
+#           - label: Phones
+#             path: /products/phones
+#       - label: Admin
+#         path: /admin
+#         $if!: vars.user.role = "admin"       shown to some
+#       - label: Docs
+#         url: "https://docs.example.com"      a link out: not a page
 # The application passes `path`, the page the user is on. It is matched exactly: `/products/phones/42`
 # is no page of the menu. Items below the third level are not found.
 

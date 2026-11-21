@@ -465,7 +465,9 @@ $schema:
 
 $replace:
   transitions:
-    - { from: draft, on: pay, to: paid }
+    - from: draft
+      on: pay
+      to: paid
 ```
 
 A template brings a schema and formulas and leaves empty the parts the file

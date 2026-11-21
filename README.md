@@ -14,17 +14,14 @@ flowchart TD
 - **Some code is too important to leave buried in generated implementation.** Pricing rules,
   RPG formulas, UI structure, and business processes determine what your application does.
   You need to read, understand, and change them yourself.
-- **Keep business rules in editable YAML specs.** Reordering a menu should mean moving a YAML item,
-  not digging through React components. Changing character progression should mean editing
-  a formula, not tracing it through the game engine.
-- **Have agents build around YAML specs.** YAML specs are part of the application code and
-  dictate its behavior—not documentation for an agent to translate into a second implementation.
-- **Reserve YAML specs for manual control.** Tell agents to leave YAML specs alone while working
-  on rendering, plumbing, and integrations. You own the rules; agents handle the bulk of the implementation.
-- **Self-contained specs are easy to read and edit.** Keep inputs, data, and formulas together,
-  without external file dependencies unless explicitly declared through `$dsl`, `$import`, or `$extends`.
-- **Still YAML, with scripting sugar.** Keep readable lists, groups, and multiline text;
-  add FEEL formulas, conditions, and scripts executed through application handlers.
+- **You control YAML specs; agents build around them.** Edit menu order and RPG formulas directly,
+  without digging through React components or game-engine code. YAML specs are executable application
+  definitions, not documentation to reimplement; tell agents to leave the specs alone and handle rendering and integrations.
+- **Self-contained YAML, with scripting sugar.** Keep inputs, data, FEEL formulas, conditions,
+  and multiline text together for easy editing; application handlers execute scripts.
+  External file dependencies are explicit through `$dsl`, `$import`, or `$extends`.
+- **Declare state machines, UIs, and business processes in YAML.** Describe states, transitions,
+  screens, and workflow steps as data and rules; application code interprets the definitions.
 - **Each YAML spec can choose its own DSL.** `$dsl: ./ui.dsl.yml` points to a separate file defining
   the spec's validation structure. UI, business logic, validation rules, and access control can use
   different DSLs in one project, all through the same `ScriptedYaml` API.
@@ -313,12 +310,26 @@ $vars:
 $replace:
   # One row per rule. `$if!` is the guard: a row whose guard fails is not there.
   transitions:
-    - { from: draft,   on: pay,     to: paid,      $if!: vars.order.total > 0 }
-    - { from: draft,   on: cancel,  to: cancelled }
-    - { from: paid,    on: ship,    to: shipped,   $if!: vars.order.in_stock }
-    - { from: paid,    on: cancel,  to: refunded }
-    - { from: shipped, on: deliver, to: delivered }
-    - { from: shipped, on: return,  to: refunded }
+    - from: draft
+      on: pay
+      to: paid
+      $if!: vars.order.total > 0
+    - from: draft
+      on: cancel
+      to: cancelled
+    - from: paid
+      on: ship
+      to: shipped
+      $if!: vars.order.in_stock
+    - from: paid
+      on: cancel
+      to: refunded
+    - from: shipped
+      on: deliver
+      to: delivered
+    - from: shipped
+      on: return
+      to: refunded
 
   # What the application does on a transition.
   effects:
@@ -364,18 +375,23 @@ $vars:
 
 $replace:
   menu:
-    - { label: Home, path: /, icon: home }
+    - label: Home
+      path: /
+      icon: home
     - label: Products
       items:
-        - { label: Phones, path: /products/phones }
+        - label: Phones
+          path: /products/phones
         - label: Laptops
           path: /products/laptops
           items:
-            - { label: Gaming, path: /products/laptops/gaming }
+            - label: Gaming
+              path: /products/laptops/gaming
     - label: Admin
       path: /admin
       $if!: vars.user != null and vars.user.role = "admin"
-    - { label: Docs, url: "https://docs.example.com" }
+    - label: Docs
+      url: "https://docs.example.com"
 ```
 
 On `/products/laptops/gaming`, signed out:
@@ -404,14 +420,40 @@ $replace:
   title: Sign up
   submit: Create account
   tabs:
-    - { id: account, label: Account }
-    - { id: profile, label: Profile }
+    - id: account
+      label: Account
+    - id: profile
+      label: Profile
   fields:
-    - { name: email, type: email, label: Email, tab: account, required: true, tooltip: We never share it. }
-    - { name: password, type: password, label: Password, tab: account, required: true, min: 8 }
-    - { name: confirm, type: password, label: Repeat the password, tab: account, required: true }
-    - { name: age, type: number, label: Age, tab: profile, min: 18, max: 120 }
-    - { name: plan, type: select, label: Plan, tab: profile, options: [free, team], required: true }
+    - name: email
+      type: email
+      label: Email
+      tab: account
+      required: true
+      tooltip: We never share it.
+    - name: password
+      type: password
+      label: Password
+      tab: account
+      required: true
+      min: 8
+    - name: confirm
+      type: password
+      label: Repeat the password
+      tab: account
+      required: true
+    - name: age
+      type: number
+      label: Age
+      tab: profile
+      min: 18
+      max: 120
+    - name: plan
+      type: select
+      label: Plan
+      tab: profile
+      options: [free, team]
+      required: true
     - name: company
       type: text
       label: Company
@@ -563,9 +605,11 @@ scripted-yaml validate <file>... [--markers sh,mdq]
 scripted-yaml parse <file> [--var NAME=value]... [--vars file.json] [--markers sh,mdq]
 scripted-yaml skill [--install [local|global]]
 scripted-yaml templates
+scripted-yaml --version
 ```
 
-`validate` reports problems (exit 1 on errors). `parse` outputs JSON; markers become
+Every command first prints the name and version (`scripted-yaml <version>`) on stderr, so the output
+itself stays clean for a pipe. `validate` reports problems (exit 1 on errors). `parse` outputs JSON; markers become
 `{ "marker": "sh", "source": "…" }`. Markdown files are read by their front matter.
 
 ```

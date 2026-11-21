@@ -5,9 +5,14 @@
 #   $vars:   { state: { default: draft } }     the first state, and whatever your guards read
 #   $replace:
 #     transitions:                             one row per rule; `$if!` is its guard
-#       - { from: draft, on: pay, to: paid, $if!: vars.order.total > 0 }
+#       - from: draft
+#         on: pay
+#         to: paid
+#         $if!: vars.order.total > 0
 #     effects:                                 what to do on a transition, kept or dropped by `$if!`
-#       - { name: receipt, run!js: sendReceipt(), $if!: changed and next = "paid" }
+#       - name: receipt
+#         run!js: sendReceipt()
+#         $if!: changed and next = "paid"
 
 $schema:
   required: [transitions*:Transition]

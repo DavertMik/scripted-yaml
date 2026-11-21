@@ -37,8 +37,12 @@ $schema:
 
 $replace:
   transitions:
-    - { from: on, on: flip, to: off }
-    - { from: off, on: flip, to: on }
+    - from: on
+      on: flip
+      to: off
+    - from: off
+      on: flip
+      to: on
 
 $add:
   flips!: count(transitions)

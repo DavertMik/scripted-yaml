@@ -130,7 +130,8 @@ describe('scripted-yaml/navigation-ui: examples/menu.yml', () => {
   });
 
   test('items below the third level validate and are not found: the template says so', async () => {
-    const text = readFileSync(example('menu.yml'), 'utf8').replace('{ label: Gaming, path: /products/laptops/gaming }', '{ label: Gaming, path: /g, items: [{ label: Deep, path: /deep }] }');
+    const text = readFileSync(example('menu.yml'), 'utf8').replace('              path: /products/laptops/gaming\n', '              path: /g\n              items:\n                - label: Deep\n                  path: /deep\n');
+    expect(text).toContain('label: Deep');
     expect(await problems(text)).toEqual([]);
     const result = await (await scripted.loadText(text, { file: example('menu.yml') })).resolve({ vars: { path: '/deep' } });
     expect(result.sitemap).not.toContain('/deep');
@@ -145,7 +146,8 @@ describe('scripted-yaml/navigation-ui: examples/menu.yml', () => {
   });
 
   test('an item without a label is an error', async () => {
-    const text = readFileSync(example('menu.yml'), 'utf8').replace('{ label: Phones, path: /products/phones }', '{ path: /products/phones }');
+    const text = readFileSync(example('menu.yml'), 'utf8').replace('- label: Phones\n          path: /products/phones', '- path: /products/phones');
+    expect(text).not.toContain('label: Phones');
     const [problem] = await problems(text);
     expect(problem).toContain('missing required field "label"');
   });
@@ -221,7 +223,7 @@ describe('scripted-yaml/forms: examples/signup.yml', () => {
   });
 
   test('a field type the template does not know is an error', async () => {
-    const text = readFileSync(example('signup.yml'), 'utf8').replace('name: age, type: number', 'name: age, type: nummber');
+    const text = readFileSync(example('signup.yml'), 'utf8').replace('name: age\n      type: number', 'name: age\n      type: nummber');
     const [problem] = await problems(text);
     expect(problem).toContain('"nummber" is not one of: text, email, number');
   });

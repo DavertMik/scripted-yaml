@@ -28,10 +28,26 @@ cart:
   subtotal: 103
   weight: 4
   items:
-    - { name: Dune,  category: books, price: 12, qty: 2, on_sale: false }
-    - { name: Lamp,  category: home,  price: 40, qty: 1, on_sale: false }
-    - { name: Emma,  category: books, price: 8,  qty: 3, on_sale: true }
-    - { name: Socks, category: socks, price: 5,  qty: 3, on_sale: false }
+    - name: Dune
+      category: books
+      price: 12
+      qty: 2
+      on_sale: false
+    - name: Lamp
+      category: home
+      price: 40
+      qty: 1
+      on_sale: false
+    - name: Emma
+      category: books
+      price: 8
+      qty: 3
+      on_sale: true
+    - name: Socks
+      category: socks
+      price: 5
+      qty: 3
+      on_sale: false
 
 customer:
   orders: [1001, 1002]

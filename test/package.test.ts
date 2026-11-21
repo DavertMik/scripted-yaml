@@ -73,7 +73,7 @@ describe('the built package', () => {
 
   test('node runs the built command line: validate', () => {
     const good = run(['node', join(root, 'dist/cli.js'), 'validate', 'good.yml', '--markers', 'sh'], join(fixtures, 'cli'));
-    expect(good).toEqual({ code: 0, out: 'ok       good.yml\n', err: '' });
+    expect(good).toEqual({ code: 0, out: 'ok       good.yml\n', err: `scripted-yaml ${manifest.version}\n` });
     const bad = run(['node', join(root, 'dist/cli.js'), 'validate', 'bad.yml', '--markers', 'sh'], join(fixtures, 'cli'));
     expect(bad.code).toBe(1);
     expect(bad.out).toContain('error    bad.yml:4  big!  unknown name "totl"');
@@ -81,7 +81,7 @@ describe('the built package', () => {
 
   test('node runs the built command line: parse', () => {
     const parsed = run(['node', join(root, 'dist/cli.js'), 'parse', 'app.yml', '--markers', 'sh', '--var', 'NAME=cli'], join(fixtures, 'package'));
-    expect(parsed.err).toBe('');
+    expect(parsed.err).toBe(`scripted-yaml ${manifest.version}\n`);
     expect(JSON.parse(parsed.out)).toEqual({ greeting: 'Hello cli', twice: 20, title: '# Dune\n\n', run: { marker: 'sh', source: 'npm test' } });
     expect(parsed.code).toBe(0);
   });
