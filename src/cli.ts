@@ -90,6 +90,13 @@ abstract class Command {
     return extname(file) === '.md' ? mdq(text).frontmatter() : text;
   }
 
+  /** A function per marker named on the command line: it keeps the value as written. */
+  protected placeholders(names: string[]): Record<string, Marker> {
+    const markers: Record<string, Marker> = {};
+    for (const name of names) markers[name] = (source) => new MarkedValue(name, source);
+    return markers;
+  }
+
   protected line(problem: Problem): string {
     return `${problem.severity.padEnd(7)}  ${problem}`;
   }
@@ -125,10 +132,8 @@ class ParseCommand extends Command {
     const [file, ...more] = args.files;
     if (file === undefined || more.length > 0) throw new UsageError('parse takes one file');
     const vars = args.vars;
-    const markers: Record<string, Marker> = {};
-    for (const name of args.markers) markers[name] = (source) => new MarkedValue(name, source);
     try {
-      const document = await new ScriptedYaml({ markers }).loadText(this.read(file), { file });
+      const document = await new ScriptedYaml({ markers: this.placeholders(args.markers) }).loadText(this.read(file), { file });
       console.log(JSON.stringify(await document.resolve({ vars }), null, 2));
       return 0;
     } catch (error) {
@@ -136,6 +141,33 @@ class ParseCommand extends Command {
       else console.error(`error    ${file}  ${(error as Error).message}`);
       return 1;
     }
+  }
+}
+
+class TestCommand extends Command {
+  readonly usage = 'scripted-yaml test <file>... [--markers sh,mdq]';
+
+  async run(args: Arguments): Promise<number> {
+    if (args.files.length === 0) throw new UsageError('test needs at least one file');
+    const scripted = new ScriptedYaml({ markers: this.placeholders(args.markers) });
+    let failed = false;
+    for (const file of args.files) {
+      const lines: string[] = [];
+      try {
+        const results = await (await scripted.loadText(this.read(file), { file })).test();
+        if (results.length === 0) lines.push(`no tests ${file}`);
+        for (const result of results) {
+          failed ||= !result.passed;
+          lines.push(`${result.passed ? 'pass' : 'FAIL'}     ${file}  ${result.about}`, ...result.failures.map((failure) => `           ${failure}`));
+        }
+      } catch (error) {
+        failed = true;
+        if (error instanceof ScriptedYamlError) lines.push(...error.problems.map((problem) => this.line(problem)));
+        else lines.push(`error    ${file}  ${(error as Error).message}`);
+      }
+      console.log(lines.join('\n'));
+    }
+    return failed ? 1 : 0;
   }
 }
 
@@ -178,7 +210,7 @@ class Product {
 
 /** The `scripted-yaml` command line: validate files, print one file resolved, or install the agent skills. */
 class Cli {
-  private readonly commands: Record<string, Command> = { validate: new ValidateCommand(), parse: new ParseCommand(), skill: new SkillCommand(), templates: new TemplatesCommand() };
+  private readonly commands: Record<string, Command> = { validate: new ValidateCommand(), parse: new ParseCommand(), test: new TestCommand(), skill: new SkillCommand(), templates: new TemplatesCommand() };
 
   private readonly product = new Product();
 
@@ -189,6 +221,7 @@ class Cli {
       '',
       '  validate  prints the problems of each file; the exit code is 1 when there is an error',
       '  parse     prints the file as JSON, every formula computed from the variables given',
+      '  test      runs the $tests of each file; the exit code is 1 when a test fails or a file has an error',
       '  skill     prints the skills that teach a coding agent to write these files and to move',
       '            application logic into them; --install copies them into .claude/skills and',
       '            .agents/skills of this project (local, the default) or of your home (global)',

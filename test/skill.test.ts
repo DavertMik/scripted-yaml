@@ -77,11 +77,18 @@ describe('skills/scripted-yaml/SKILL.md', () => {
 
   test('shop.yml: its own $tests pass, and a big order changes the payment methods', async () => {
     const document = await scripted.loadText(read('shop.yml'), { file: join(examples, 'shop.yml') });
-    expect((await document.test()).map((result) => result.failures)).toEqual([[]]);
+    expect((await document.test()).map((result) => result.failures)).toEqual([[], []]);
     const result = await document.resolve({ vars: { customer: { orders: [], tags: [] }, cart: { subtotal: 1200, items: [] } } });
     expect(result.discount).toEqual({ loyalty: 0, books: 0, $value: 0, note: 'The bigger of the two discounts applies.' });
     expect(result.checkout).toEqual({ payment_methods: ['card', 'bank_transfer'], note: 'Orders over 1000 need a card or a bank transfer.' });
     expect(result.shipping.map((option: { name: string }) => option.name)).toEqual(['Standard', 'Economy']);
+  });
+
+  test('the skill teaches the test command and the compact form of tests', () => {
+    expect(cli('test', 'shop.yml').out.split('\n').slice(0, 2)).toEqual(['pass     shop.yml  A vip customer with three books', 'pass     shop.yml  A new customer with an empty cart']);
+    expect(skill).toContain('scripted-yaml test <file>');
+    expect(skill).toContain('each test is ONE line');
+    for (const line of read('shop.yml').split('$tests:\n')[1]!.trimEnd().split('\n')) expect(line).toMatch(/^  - \{ about: .*\}$/);
   });
 
   test('team.yml: a list item is read by the field its schema names', async () => {

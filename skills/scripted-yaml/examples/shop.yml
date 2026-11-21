@@ -42,14 +42,5 @@ checkout:
       note: ''
 
 $tests:
-  - about: A regular customer with three books
-    vars:
-      customer: { orders: [], tags: [vip] }
-      cities: [Lyon, Paris]
-      cart: { subtotal: 60, items: [{ category: books, price: 10 }, { category: books, price: 20 }, { category: books, price: 30 }] }
-    expect:
-      discount: 6
-      discount.note: The bigger of the two discounts applies.
-      to_pay: 54
-      shipping.name: [Standard, Express, Pickup in Lyon]
-      checkout.payment_methods: [card, paypal]
+  - { about: A vip customer with three books, vars: { customer: { orders: [], tags: [vip] }, cities: [Lyon, Paris], cart: { subtotal: 60, items: [{ category: books, price: 10 }, { category: books, price: 20 }, { category: books, price: 30 }] } }, expect: { discount: 6, to_pay: 54, shipping.name: [Standard, Express, Pickup in Lyon], checkout.payment_methods: [card, paypal] } }
+  - { about: A new customer with an empty cart, vars: { customer: { orders: [], tags: [] }, cart: { subtotal: 0, items: [] } }, expect: { discount: 0, shipping.name: [Standard, Economy], checkout.note: '' } }

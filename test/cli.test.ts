@@ -206,3 +206,36 @@ describe('the name and version', () => {
     }
   });
 });
+
+describe('scripted-yaml test', () => {
+  test('every test passes: one line per test, exit code 0', () => {
+    const run = cli('test', 'tested.yml', '--markers', 'sh');
+    expect(run.out).toBe('pass     tested.yml  A big order gets ten percent off\npass     tested.yml  A small order pays in full\n');
+    expect(run.code).toBe(0);
+  });
+
+  test('a failing test says what was expected and what came; exit code 1', () => {
+    const run = cli('test', 'failing.yml');
+    const lines = run.out.trimEnd().split('\n');
+    expect(lines.slice(0, 3)).toEqual(['pass     failing.yml  A big order', 'FAIL     failing.yml  A wrong expectation', '           discount: expected 5, got 0']);
+    expect(lines[3]).toBe('FAIL     failing.yml  A missing variable');
+    expect(lines[4]).toContain('subtotal');
+    expect(run.code).toBe(1);
+  });
+
+  test('a file without tests says so and does not fail; several files are all run', () => {
+    const run = cli('test', 'good.yml', 'tested.yml', '--markers', 'sh');
+    expect(run.out).toStartWith('no tests good.yml\npass     tested.yml');
+    expect(run.code).toBe(0);
+  });
+
+  test('a file with a validation error is reported and fails', () => {
+    const run = cli('test', 'bad.yml', '--markers', 'sh');
+    expect(run.out).toContain('error    bad.yml:3  run!bash');
+    expect(run.code).toBe(1);
+  });
+
+  test('without a file it is a usage error', () => {
+    expect(cli('test').code).toBe(2);
+  });
+});

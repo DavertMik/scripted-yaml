@@ -344,15 +344,9 @@ $replace:
       $if!: changed
 
 $tests:
-  - about: Paying a draft order
-    vars: { state: draft, event: pay, order: { total: 50, in_stock: true } }
-    expect: { next: paid, error: null, effects.name: [receipt, audit] }
-  - about: An empty order cannot be paid
-    vars: { state: draft, event: pay, order: { total: 0, in_stock: true } }
-    expect: { allowed: [cancel], next: draft, error: Cannot pay from draft, effects.name: [] }
-  - about: A delivered order is final
-    vars: { state: shipped, event: deliver, order: { total: 50, in_stock: true } }
-    expect: { next: delivered, final: true }
+  - { about: Paying a draft order, vars: { state: draft, event: pay, order: { total: 50, in_stock: true } }, expect: { next: paid, error: null, effects.name: [receipt, audit] } }
+  - { about: An empty order cannot be paid, vars: { state: draft, event: pay, order: { total: 0, in_stock: true } }, expect: { allowed: [cancel], next: draft, error: Cannot pay from draft, effects.name: [] } }
+  - { about: A delivered order is final, vars: { state: shipped, event: deliver, order: { total: 50, in_stock: true } }, expect: { next: delivered, final: true } }
 ```
 
 - **A transition is a row**: `from`, `on`, `to`. Its guard is `$if!`: a row whose guard fails is dropped, so `allowed` never offers it.
@@ -603,13 +597,14 @@ result.theme.accent;                                      // "gold"
 ```
 scripted-yaml validate <file>... [--markers sh,mdq]
 scripted-yaml parse <file> [--var NAME=value]... [--vars file.json] [--markers sh,mdq]
+scripted-yaml test <file>... [--markers sh,mdq]
 scripted-yaml skill [--install [local|global]]
 scripted-yaml templates
 scripted-yaml --version
 ```
 
 Every command first prints the name and version (`scripted-yaml <version>`) on stderr, so the output
-itself stays clean for a pipe. `validate` reports problems (exit 1 on errors). `parse` outputs JSON; markers become
+itself stays clean for a pipe. `validate` reports problems (exit 1 on errors). `test` runs the `$tests` of each file (exit 1 when one fails). `parse` outputs JSON; markers become
 `{ "marker": "sh", "source": "…" }`. Markdown files are read by their front matter.
 
 ```

@@ -20,12 +20,6 @@ discount:
 total!: paid_seats * plan.per_seat * months * (1 - discount)
 
 $tests:
-  - about: A team of 8, paid monthly
-    vars: { account: { plan: team, seats: 8, yearly: false, nonprofit: false } }
-    expect: { total: 36 }
-  - about: A nonprofit business of 14, paid yearly
-    vars: { account: { plan: business, seats: 14, yearly: true, nonprofit: true } }
-    expect: { discount: 0.5, total: 480 }
-  - about: A free account under its included seats
-    vars: { account: { plan: free, seats: 2, yearly: false, nonprofit: false } }
-    expect: { paid_seats: 0, total: 0 }
+  - { about: "A team of 8, paid monthly", vars: { account: { plan: team, seats: 8, yearly: false, nonprofit: false } }, expect: { total: 36 } }
+  - { about: "A nonprofit business of 14, paid yearly", vars: { account: { plan: business, seats: 14, yearly: true, nonprofit: true } }, expect: { discount: 0.5, total: 480 } }
+  - { about: A free account under its included seats, vars: { account: { plan: free, seats: 2, yearly: false, nonprofit: false } }, expect: { paid_seats: 0, total: 0 } }

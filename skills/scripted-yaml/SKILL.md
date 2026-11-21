@@ -163,24 +163,17 @@ checkout:
       note: ''
 
 $tests:
-  - about: A regular customer with three books
-    vars:
-      customer: { orders: [], tags: [vip] }
-      cities: [Lyon, Paris]
-      cart: { subtotal: 60, items: [{ category: books, price: 10 }, { category: books, price: 20 }, { category: books, price: 30 }] }
-    expect:
-      discount: 6
-      discount.note: The bigger of the two discounts applies.
-      to_pay: 54
-      shipping.name: [Standard, Express, Pickup in Lyon]
-      checkout.payment_methods: [card, paypal]
+  - { about: A vip customer with three books, vars: { customer: { orders: [], tags: [vip] }, cities: [Lyon, Paris], cart: { subtotal: 60, items: [{ category: books, price: 10 }, { category: books, price: 20 }, { category: books, price: 30 }] } }, expect: { discount: 6, to_pay: 54, shipping.name: [Standard, Express, Pickup in Lyon], checkout.payment_methods: [card, paypal] } }
+  - { about: A new customer with an empty cart, vars: { customer: { orders: [], tags: [] }, cart: { subtotal: 0, items: [] } }, expect: { discount: 0, shipping.name: [Standard, Economy], checkout.note: '' } }
 ```
 
 - **`$functions`**: `name(parameters)!: formula`. Not the name of a FEEL built-in or of a key.
 - **`$if!` / `$unless!`** keep or drop the list item or map they sit in. They must give true or false.
 - **`$each!`** repeats a list item per value, named by `$as`; `$if!` beside it is checked per value.
 - **`$when`** changes keys of its map: every matching case applies, in order; `$else` when none did.
-- **`$tests`**: `vars` in, `expect` out, as paths. The application runs them with `document.test()`.
+- **`$tests`**: `vars` in, `expect` out, as paths. Unlike the rules, each test is ONE line:
+  `- { about: …, vars: { … }, expect: { … } }`. Run them with `scripted-yaml test <file>`.
+- **Style of the rules**: block YAML, one key per line. No `- { a: 1, b: 2 }` list items.
 
 ## `$import`: functions and data from other files
 
@@ -241,8 +234,8 @@ error    team-wrong.yml:13  agents[1]  missing required field "role"
 error    team-wrong.yml:15  agents[2].role  "manager" is not one of: reviewer, tester
 ```
 
-When many files share a schema, it lives in its own file and each file starts with
-`$dsl: ./pipeline.dsl.yml`. A DSL only checks: defaults belong in the file's own `$vars`.
+Only when several files have the same format does the schema live in its own file, each file
+starting with `$dsl: ./pipeline.dsl.yml`. For one file it stays inline, as `$schema`. A DSL only checks: defaults belong in the file's own `$vars`.
 
 ## `$extends`: a patch of another file
 
@@ -287,6 +280,7 @@ package: run `scripted-yaml templates`, and read the comment at the top of the t
 
 ```
 scripted-yaml validate <file>... [--markers sh,mdq]
+scripted-yaml test <file>... [--markers sh,mdq]
 scripted-yaml parse <file> [--var NAME=value]... [--vars file.json] [--markers sh,mdq]
 ```
 

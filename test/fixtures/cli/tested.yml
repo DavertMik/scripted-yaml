@@ -1,0 +1,10 @@
+$vars:
+  subtotal: {}
+
+discount!: if vars.subtotal >= 200 then vars.subtotal * 0.10 else 0
+to_pay!: vars.subtotal - discount
+ship!sh: ./ship.sh
+
+$tests:
+  - { about: A big order gets ten percent off, vars: { subtotal: 240 }, expect: { discount: 24, to_pay: 216 } }
+  - { about: A small order pays in full, vars: { subtotal: 50 }, expect: { discount: 0 } }

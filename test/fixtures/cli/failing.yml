@@ -1,0 +1,9 @@
+$vars:
+  subtotal: {}
+
+discount!: if vars.subtotal >= 200 then vars.subtotal * 0.10 else 0
+
+$tests:
+  - { about: A big order, vars: { subtotal: 240 }, expect: { discount: 24 } }
+  - { about: A wrong expectation, vars: { subtotal: 50 }, expect: { discount: 5 } }
+  - { about: A missing variable, vars: {}, expect: { discount: 0 } }

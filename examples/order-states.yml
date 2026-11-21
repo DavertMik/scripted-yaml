@@ -46,12 +46,6 @@ $replace:
       $if!: changed
 
 $tests:
-  - about: Paying a draft order
-    vars: { state: draft, event: pay, order: { total: 50, in_stock: true } }
-    expect: { next: paid, error: null, effects.name: [receipt, audit] }
-  - about: An empty order cannot be paid
-    vars: { state: draft, event: pay, order: { total: 0, in_stock: true } }
-    expect: { allowed: [cancel], next: draft, error: Cannot pay from draft, effects.name: [] }
-  - about: A delivered order is final
-    vars: { state: shipped, event: deliver, order: { total: 50, in_stock: true } }
-    expect: { next: delivered, final: true }
+  - { about: Paying a draft order, vars: { state: draft, event: pay, order: { total: 50, in_stock: true } }, expect: { next: paid, error: null, effects.name: [receipt, audit] } }
+  - { about: An empty order cannot be paid, vars: { state: draft, event: pay, order: { total: 0, in_stock: true } }, expect: { allowed: [cancel], next: draft, error: Cannot pay from draft, effects.name: [] } }
+  - { about: A delivered order is final, vars: { state: shipped, event: deliver, order: { total: 50, in_stock: true } }, expect: { next: delivered, final: true } }

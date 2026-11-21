@@ -274,22 +274,17 @@ A file may carry its own tests: variables in, expected values out.
 
 ```yaml
 $tests:
-  - about: A regular customer gets the VIP code
-    vars:
-      customer: { orders: [1, 2], tags: [vip] }
-      cart: { subtotal: 120, weight: 3, items: [] }
-      destination: { country: NL }
-      today: { month: 11, day: 25 }
-    expect:
-      is_vip: true
-      discount_codes.VIP20.valid: true
-      shipping[1].name: Standard
+  - { about: A regular customer gets the VIP code, vars: { customer: { orders: [1, 2], tags: [vip] }, cart: { subtotal: 120 } }, expect: { is_vip: true, discount_codes.VIP20.valid: true } }
 ```
+
+A test is one line: the rules of a file are written out, one key per line, and
+its tests are kept compact below them.
 
 Each test resolves the file with its `vars` and compares the keys under
 `expect` with the computed values; each key under `expect` is itself a
 formula. `$tests` is not part of the file's data. `document.test()` runs them
 and returns one result per test.
+On the command line: `scripted-yaml test <file>...` prints `pass` or `FAIL` per test.
 
 ## 4. Structure keywords
 
