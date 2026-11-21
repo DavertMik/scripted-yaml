@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import type { Imported } from './importers.js';
-import { type Entry, ListNode, MapNode, type Node } from './node.js';
-import { type Problems, ScriptedYamlError } from './problem.js';
+import { type Entry, ListNode, MapNode, type Node, ScalarNode } from './node.js';
+import { Problem, type Problems, ScriptedYamlError, ValidationFailed } from './problem.js';
 import { Resolution } from './resolution.js';
 import type { Source } from './source.js';
 import type { Variable } from './variables.js';
@@ -66,6 +66,21 @@ export class Document {
     return new Resolution(this.source, this.imports, options.vars ?? {}).run();
   }
 
+  /** `resolve`, without waiting: computing needs no promise. */
+  // biome-ignore lint/suspicious/noExplicitAny: the shape is the file's own
+  resolveSync(options: { vars?: Record<string, unknown> } = {}): any {
+    return new Resolution(this.source, this.imports, options.vars ?? {}).run();
+  }
+
+  /**
+   * The file as written, with `$extends` applied: one file that needs no base. Keys stay as written
+   * (`when!`, `run!sh`, `$vars`) and nothing is computed. A formula that reads `base` gets the base's
+   * formula in its place. Write it with a YAML library to save it.
+   */
+  merged(): Record<string, unknown> {
+    return Merged.of(this.source.root);
+  }
+
   /** Runs the file's `$tests`: each resolves the file with its `vars` and compares the paths under `expect`. */
   async test(): Promise<TestResult[]> {
     return this.source.tests.map((test, index) => {
@@ -105,5 +120,48 @@ export class Document {
       problems.error(entry, `the function of the marker "${entry.key.marker}" failed: ${(error as Error).message}`);
       return undefined;
     }
+  }
+}
+
+/** The tree after `$extends` as plain data, keys as written, with each `base` written out. */
+class Merged {
+  static of(map: MapNode): Record<string, unknown> {
+    const data: Record<string, unknown> = {};
+    for (const entry of map.entries) data[entry.key.raw] = Merged.value(entry);
+    return data;
+  }
+
+  private static value(entry: Entry): unknown {
+    if (entry.key.kind === 'formula' && entry.value instanceof ScalarNode && entry.base) return Merged.formula(entry);
+    return Merged.node(entry.value);
+  }
+
+  private static node(node: Node): unknown {
+    if (node instanceof MapNode) return Merged.of(node);
+    if (node instanceof ListNode) return node.items.map((item) => Merged.node(item));
+    return node.toData();
+  }
+
+  /** The formula with `base` replaced by what it stood for, in brackets. */
+  private static formula(entry: Entry): string {
+    const source = (entry.value as ScalarNode).source;
+    if (!entry.value.expression?.reads.some((name) => name === 'base' || name.startsWith('base.'))) return source;
+    const base = entry.base!;
+    let inlined: string;
+    if (base.key.kind === 'formula' && base.value instanceof ScalarNode) inlined = base.base ? Merged.formula(base) : base.value.source;
+    else if (base.key.kind === 'plain' && base.value instanceof ScalarNode) inlined = JSON.stringify(base.value.value ?? null);
+    else {
+      const what = base.key.kind === 'marked' ? 'a marked value' : 'a map or a list';
+      throw new ValidationFailed([new Problem(entry.file, entry.line, entry.column, entry.path(), `base is ${what}, which a formula cannot hold: the file cannot be written without its base`, 'error')]);
+    }
+    return Merged.replaceBase(source, `(${inlined})`);
+  }
+
+  /** Every `base` that is a name, not part of a longer name, a field or a text. */
+  private static replaceBase(source: string, by: string): string {
+    return source
+      .split(/("(?:[^"\\]|\\.)*")/)
+      .map((part, index) => (index % 2 ? part : part.replace(/(?<![\w.])base(?![\w])/g, by)))
+      .join('');
   }
 }

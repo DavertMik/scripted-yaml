@@ -595,6 +595,20 @@ result.theme.accent;                                      // "gold"
 | `document.resolve({ vars })` | Resolved data; throws `ResolveFailed` on evaluation errors |
 | `document.test()` | Results of the file's `$tests` |
 | `document.variables` | Declared inputs |
+| `validateTextSync` / `loadTextSync` / `document.resolveSync` | The same without a promise; `loadTextSync` refuses a file with `$import` |
+| `document.merged()` | The file as written with `$extends` applied, as data: write it as YAML to get one file that needs no base |
+
+Files that are not on a disk (a Worker, a browser, a database) are read through one option. It
+gets the path as written and the file that names it, and gives the text, or `undefined` to read the disk:
+
+```ts
+const saved: Record<string, string> = { 'base.yml': '…', 'pipeline.dsl.yml': '…' };
+const scripted = new ScriptedYaml({ read: (path) => saved[path.replace(/^\.\//, '')] });
+const document = scripted.loadTextSync('$extends: ./base.yml\n…', { file: 'mine.yml' });
+```
+
+It may give `{ file, text }` instead, to name the file it read: problems name that file, and its own
+`$extends` and `$dsl` paths start from it.
 
 `load` throws `ValidationFailed` with `.problems` on validation errors.
 

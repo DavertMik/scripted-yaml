@@ -4,7 +4,7 @@ import { Checker } from './checker.js';
 import { Document, type Marker } from './document.js';
 import { type Imported, Importer, ImportFailed, type ImportHost } from './importers.js';
 import { Problem, Problems, ValidationFailed } from './problem.js';
-import { type Source, SourceLoader } from './source.js';
+import { type Reader, type Source, SourceLoader } from './source.js';
 
 export interface ScriptedYamlOptions {
   /**
@@ -12,6 +12,11 @@ export interface ScriptedYamlOptions {
    * This is the only thing an application registers: functions come from each file's `$import`.
    */
   markers?: Record<string, Marker> | string[];
+  /**
+   * Reads the files that `$extends` and `$dsl` name, for files that are not on a disk: a Worker, a browser,
+   * a database. It gets the path as written and the file that names it. When it gives undefined, the disk is read.
+   */
+  read?: Reader;
 }
 
 export interface FileOptions {
@@ -22,8 +27,10 @@ export interface FileOptions {
 /** Validates and loads scripted-yaml files. It computes nothing: see `Document.resolve`. */
 export class ScriptedYaml {
   private readonly markers: Record<string, Marker | undefined> = {};
+  private readonly reader?: Reader;
 
   constructor(options: ScriptedYamlOptions = {}) {
+    this.reader = options.read;
     if (Array.isArray(options.markers)) for (const name of options.markers) this.markers[name] = undefined;
     else Object.assign(this.markers, options.markers);
   }
@@ -43,6 +50,11 @@ export class ScriptedYaml {
     return this.check(input, options.file ?? '(text)').problems.list;
   }
 
+  /** `validateText`, without waiting: checking runs nothing, so it needs no promise. */
+  validateTextSync(input: unknown, options: FileOptions = {}): Problem[] {
+    return this.check(input, options.file ?? '(text)').problems.list;
+  }
+
   /** Reads a file, validates it, applies `$extends`, loads each `$import` and calls each marker's function. No formula is computed. */
   async load(path: string): Promise<Document> {
     return this.loadText(this.readFile(path), { file: path });
@@ -53,9 +65,24 @@ export class ScriptedYaml {
     return this.open(input, options.file ?? '(text)', []);
   }
 
+  /**
+   * `loadText`, without waiting, for a file with no `$import`: an import loads a module, and that takes a promise.
+   * Throws `ValidationFailed` for a file that imports.
+   */
+  loadTextSync(input: unknown, options: FileOptions = {}): Document {
+    const file = options.file ?? '(text)';
+    const { source, problems } = this.check(input, file);
+    if (!source || problems.failed) throw new ValidationFailed(problems.list);
+    for (const spec of source.imports) problems.error(spec.entry, '$import loads a module, which takes a promise: use loadText, not loadTextSync');
+    if (problems.failed) throw new ValidationFailed(problems.list);
+    const document = new Document(file, source, new Map(), this.markers, problems);
+    if (problems.failed) throw new ValidationFailed(problems.list);
+    return document;
+  }
+
   private check(input: unknown, file: string): { source: Source | undefined; problems: Problems } {
     const problems = new Problems();
-    const source = new SourceLoader(problems).load(input, file);
+    const source = new SourceLoader(problems, this.reader).load(input, file);
     if (source) new Checker(source, Object.keys(this.markers), problems).run();
     problems.sort();
     return { source, problems };

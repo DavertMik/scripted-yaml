@@ -95,11 +95,21 @@ export class Source {
   }
 }
 
+/**
+ * The application's way to read a file that `$extends` or `$dsl` names, in place of the disk.
+ * It gets the path as written and the file that names it, and gives the text, or the text with the
+ * name the file goes by (for problems and its own relative paths). Undefined: the disk is read.
+ */
+export type Reader = (path: string, from: string) => string | { file: string; text: string } | undefined;
+
 /** Reads a file and the files it names with `$extends` and `$dsl`. */
 export class SourceLoader {
   private readonly templates = new Templates();
 
-  constructor(private readonly problems: Problems) {}
+  constructor(
+    private readonly problems: Problems,
+    private readonly reader?: Reader,
+  ) {}
 
   /** The source for text or data. Undefined when it cannot be read at all; the problems say why. */
   load(input: unknown, file: string): Source | undefined {
@@ -115,6 +125,15 @@ export class SourceLoader {
 
   /** Reads the tree of a file that another file names. A problem is reported on the line that names it. */
   read(from: Entry, path: string, chain: string[] = []): MapNode | undefined {
+    const given = this.reader?.(path, from.file);
+    if (given !== undefined) {
+      const { file, text } = typeof given === 'string' ? { file: join(dirname(from.file), path), text: given } : given;
+      if (chain.includes(resolve(file))) {
+        this.problems.error(from, `"${path}" extends itself, directly or through other files`);
+        return undefined;
+      }
+      return this.tree(text, file, [...chain, resolve(file)]);
+    }
     const absolute = this.absolute(from.file, path);
     if (chain.includes(absolute)) {
       this.problems.error(from, `"${path}" extends itself, directly or through other files`);

@@ -5,7 +5,12 @@ import { basename, join } from 'node:path';
 export class Templates {
   static readonly prefix = 'scripted-yaml/';
 
-  constructor(private readonly source = join(import.meta.dirname, '../templates')) {}
+  /** The folder is found when a template is first asked for, so code bundled without one (a Worker) can still load files. */
+  constructor(private readonly folder?: string) {}
+
+  private get source(): string {
+    return this.folder ?? join(import.meta.dirname, '../templates');
+  }
 
   get names(): string[] {
     return readdirSync(this.source)
