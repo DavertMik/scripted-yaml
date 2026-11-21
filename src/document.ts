@@ -1,5 +1,5 @@
-import { isDeepStrictEqual } from 'node:util';
 import type { Imported } from './importers.js';
+import { Platform } from './platform.js';
 import { type Entry, ListNode, MapNode, type Node, ScalarNode } from './node.js';
 import { Problem, type Problems, ScriptedYamlError, ValidationFailed } from './problem.js';
 import { Resolution } from './resolution.js';
@@ -91,7 +91,7 @@ export class Document {
         resolution.run();
         for (const [path, expected] of Object.entries(expect ?? {})) {
           const actual = resolution.probe(path);
-          if (!isDeepStrictEqual(actual, expected)) failures.push(`${path}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+          if (!Platform.same(actual, expected)) failures.push(`${path}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
         }
       } catch (error) {
         if (!(error instanceof ScriptedYamlError)) throw error;

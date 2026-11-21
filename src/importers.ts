@@ -1,6 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { extname } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { Platform } from './platform.js';
 import { mdq } from 'mdq-cli';
 import type { Document } from './document.js';
 import type { Entry } from './node.js';
@@ -50,7 +48,7 @@ export abstract class Importer {
 
   static for(path: string): Importer | undefined {
     if (Importer.all.length === 0) Importer.all.push(new ModuleImporter(), new YamlImporter(), new MarkdownImporter());
-    return Importer.all.find((importer) => importer.extensions.includes(extname(path)));
+    return Importer.all.find((importer) => importer.extensions.includes(Platform.path.extname(path)));
   }
 
   static get supported(): string[] {
@@ -61,7 +59,7 @@ export abstract class Importer {
   /** A path that does not exist is a problem; where there is no disk, so is every path. */
   exists(spec: ImportSpec): boolean {
     try {
-      return existsSync(spec.absolute);
+      return Platform.fs.existsSync(spec.absolute);
     } catch {
       return false;
     }
@@ -86,7 +84,7 @@ export class ModuleImporter extends Importer {
   async load(spec: ImportSpec): Promise<Imported[]> {
     let module: Record<string, unknown>;
     try {
-      module = await import(pathToFileURL(spec.absolute).href);
+      module = await import(Platform.url.pathToFileURL(spec.absolute).href);
     } catch (error) {
       throw new ImportFailed(`cannot import "${spec.path}": ${(error as Error).message}`);
     }
@@ -126,7 +124,7 @@ export class MarkdownImporter extends Importer {
     const [name] = this.names(spec);
     let text: string;
     try {
-      text = readFileSync(spec.absolute, 'utf8');
+      text = Platform.fs.readFileSync(spec.absolute, 'utf8');
     } catch (error) {
       throw new ImportFailed(`cannot read "${spec.path}": ${(error as Error).message}`);
     }

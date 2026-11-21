@@ -610,6 +610,9 @@ const document = scripted.loadTextSync('$extends: ./base.yml\n…', { file: 'min
 It may give `{ file, text }` instead, to name the file it read: problems name that file, and its own
 `$extends` and `$dsl` paths start from it.
 
+The library imports nothing from Node: it asks for `fs` and `path` when it reads a file, so it
+also loads in a browser. There, every file comes through `read`, and `$import` of a script needs Node or Bun.
+
 `load` throws `ValidationFailed` with `.problems` on validation errors.
 
 ## The command line

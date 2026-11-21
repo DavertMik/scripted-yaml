@@ -81,3 +81,23 @@ describe('merged', () => {
     expect(document.merged()['limit!']).toBe('if (5) > 1 then string length("base") else database');
   });
 });
+
+describe('without Node', () => {
+  test('a file and its base load through read when Node gives no modules, as in a browser', () => {
+    const saved = process.getBuiltinModule;
+    (process as { getBuiltinModule?: unknown }).getBuiltinModule = undefined;
+    try {
+      const document = scripted().loadTextSync('$extends: ./base.yml\n$replace:\n  name: mine\n', { file: 'own/mine.yml' });
+      expect(document.resolveSync().name).toBe('mine');
+      expect(document.resolveSync().stages[0].when).toBe(true);
+    } finally {
+      process.getBuiltinModule = saved;
+    }
+  });
+
+  test('the browser bundle imports nothing from Node', async () => {
+    const built = await Bun.build({ entrypoints: [`${import.meta.dir}/../src/index.ts`], target: 'browser' });
+    const code = await built.outputs[0]!.text();
+    expect(code).not.toMatch(/["']node:[a-z]/);
+  });
+});

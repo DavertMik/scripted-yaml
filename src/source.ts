@@ -1,7 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { dirname, extname, join, resolve } from 'node:path';
 import { Importer, ImportFailed, ImportSpec } from './importers.js';
 import { type Entry, MapNode, type Node, ScalarNode, Signature } from './node.js';
+import { Platform } from './platform.js';
 import { Patch } from './patch.js';
 import type { Problems } from './problem.js';
 import { SourceReader } from './reader.js';
@@ -68,7 +67,7 @@ export class Source {
       const path = entry.key.raw;
       const importer = Importer.for(path);
       if (!importer) {
-        this.problems.error(entry, `cannot import "${path}": there is no importer for ${extname(path) || 'this kind of'} files (only ${Importer.supported.join(', ')})`);
+        this.problems.error(entry, `cannot import "${path}": there is no importer for ${Platform.path.extname(path) || 'this kind of'} files (only ${Importer.supported.join(', ')})`);
         continue;
       }
       const spec = new ImportSpec(path, this.loader.absolute(entry.file, path), entry.value.toData(), entry);
@@ -113,18 +112,20 @@ export class SourceLoader {
 
   /** The source for text or data. Undefined when it cannot be read at all; the problems say why. */
   load(input: unknown, file: string): Source | undefined {
-    const root = this.tree(input, file, [resolve(file)]);
+    const root = this.tree(input, file, [Platform.path.resolve(file)]);
     return root && new Source(file, root, this, this.problems);
   }
 
   /** Where a path written in a file points: beside that file, or a template of the package for `scripted-yaml/<name>`. */
   absolute(file: string, path: string): string {
     if (this.templates.isTemplate(path)) return this.templates.file(path) ?? path;
+    const { dirname, resolve } = Platform.path;
     return resolve(dirname(file), path);
   }
 
   /** Reads the tree of a file that another file names. A problem is reported on the line that names it. */
   read(from: Entry, path: string, chain: string[] = []): MapNode | undefined {
+    const { dirname, join, resolve } = Platform.path;
     const given = this.reader?.(path, from.file);
     if (given !== undefined) {
       const { file, text } = typeof given === 'string' ? { file: join(dirname(from.file), path), text: given } : given;
@@ -145,7 +146,7 @@ export class SourceLoader {
     }
     let text: string;
     try {
-      text = readFileSync(absolute, 'utf8');
+      text = Platform.fs.readFileSync(absolute, 'utf8');
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       this.problems.error(from, `cannot read "${path}": ${code === 'ENOENT' ? 'the file does not exist' : (error as Error).message}`);

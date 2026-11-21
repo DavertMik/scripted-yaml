@@ -1,8 +1,7 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { Checker } from './checker.js';
 import { Document, type Marker } from './document.js';
 import { type Imported, Importer, ImportFailed, type ImportHost } from './importers.js';
+import { Platform } from './platform.js';
 import { Problem, Problems, ValidationFailed } from './problem.js';
 import { type Reader, type Source, SourceLoader } from './source.js';
 
@@ -90,7 +89,7 @@ export class ScriptedYaml {
 
   private readFile(path: string): string {
     try {
-      return readFileSync(path, 'utf8');
+      return Platform.fs.readFileSync(path, 'utf8');
     } catch (error) {
       throw new ValidationFailed([new Problem(path, 0, 0, '', `cannot read the file: ${(error as Error).message}`)], { cause: error });
     }
@@ -103,6 +102,7 @@ export class ScriptedYaml {
 
     const host: ImportHost = {
       document: (absolute) => {
+        const { resolve } = Platform.path;
         if (absolute === resolve(file) || chain.includes(absolute)) throw new ImportFailed('the import comes back to this file: an import cycle');
         return this.open(this.readFile(absolute), absolute, [...chain, resolve(file)]);
       },
