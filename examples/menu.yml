@@ -1,0 +1,21 @@
+# Navigation: a menu with a dropdown, on the bundled template. The application passes the page the user is on.
+
+$extends: scripted-yaml/navigation-ui
+
+$vars:
+  user: { optional: true }
+
+$replace:
+  menu:
+    - { label: Home, path: /, icon: home }
+    - label: Products
+      items:
+        - { label: Phones, path: /products/phones }
+        - label: Laptops
+          path: /products/laptops
+          items:
+            - { label: Gaming, path: /products/laptops/gaming }
+    - label: Admin
+      path: /admin
+      $if!: vars.user != null and vars.user.role = "admin"
+    - { label: Docs, url: "https://docs.example.com" }

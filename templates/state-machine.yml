@@ -1,0 +1,38 @@
+# A state machine: states, guarded transitions, effects. The application keeps the state and runs the effects.
+#
+# Your file, after `$extends: scripted-yaml/state-machine`:
+#   $schema: { State: [draft, paid] }          the states; a transition to any other is an error
+#   $vars:   { state: { default: draft } }     the first state, and whatever your guards read
+#   $replace:
+#     transitions:                             one row per rule; `$if!` is its guard
+#       - { from: draft, on: pay, to: paid, $if!: vars.order.total > 0 }
+#     effects:                                 what to do on a transition, kept or dropped by `$if!`
+#       - { name: receipt, run!js: sendReceipt(), $if!: changed and next = "paid" }
+
+$schema:
+  required: [transitions*:Transition]
+  optional: [effects*:Effect, allowed, match, changed, next, final, error]
+  Transition:
+    required: [from:State, on, to:State]
+  Effect:
+    key: name
+    required: [name]
+    optional: [run]
+  State: []
+
+$vars:
+  state: { about: The state now. }
+  event: { optional: true, about: What happened. Without it the file only tells what may happen. }
+
+transitions: []
+effects: []
+
+# The events the state takes now.
+allowed!: transitions[from = vars.state].on
+match!: transitions[from = vars.state and on = vars.event]
+# Whether the event moves the machine, and where to.
+changed!: count(match) > 0
+next!: if changed then match[1].to else vars.state
+# No transition leaves the next state.
+final!: count(transitions[from = next]) = 0
+error!: if vars.event != null and not(changed) then "Cannot " + vars.event + " from " + vars.state else null

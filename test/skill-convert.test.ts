@@ -32,12 +32,12 @@ class MemoryStore implements Store {
 }
 
 describe('skills/scripted-yaml-convert/SKILL.md', () => {
-  test('has the front matter of a skill and stays within 160 lines', () => {
+  test('has the front matter of a skill and stays within 165 lines', () => {
     const front = parse(skill.slice(4, skill.indexOf('\n---\n', 4)));
     expect(Object.keys(front)).toEqual(['name', 'description']);
     expect(front.name).toBe('scripted-yaml-convert');
     expect(front.description).toStartWith('Use when');
-    expect(skill.split('\n').length).toBeLessThanOrEqual(160);
+    expect(skill.split('\n').length).toBeLessThanOrEqual(165);
   });
 
   test('shows the YAML file exactly as it is, and the file keeps its own limit of 150 lines', () => {

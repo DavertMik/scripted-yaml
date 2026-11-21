@@ -1,0 +1,27 @@
+# Form: a sign-up form of two tabs, on the bundled template. The application passes what the user entered.
+
+$extends: scripted-yaml/forms
+
+$replace:
+  title: Sign up
+  submit: Create account
+  tabs:
+    - { id: account, label: Account }
+    - { id: profile, label: Profile }
+  fields:
+    - { name: email, type: email, label: Email, tab: account, required: true, tooltip: We never share it. }
+    - { name: password, type: password, label: Password, tab: account, required: true, min: 8 }
+    - { name: confirm, type: password, label: Repeat the password, tab: account, required: true }
+    - { name: age, type: number, label: Age, tab: profile, min: 18, max: 120 }
+    - { name: plan, type: select, label: Plan, tab: profile, options: [free, team], required: true }
+    - name: company
+      type: text
+      label: Company
+      tab: profile
+      required: true
+      $if!: value("plan") = "team"
+  rules:
+    - field: confirm
+      tab: account
+      message: The passwords differ
+      $if!: value("confirm") != null and value("confirm") != value("password")

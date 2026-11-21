@@ -6,6 +6,7 @@ import { Patch } from './patch.js';
 import type { Problems } from './problem.js';
 import { SourceReader } from './reader.js';
 import { Schema } from './schema.js';
+import { Templates } from './templates.js';
 import { Variables } from './variables.js';
 
 /** One file as written: its tree after `$extends`, and what its top `$` keys say. Nothing is computed. */
@@ -96,6 +97,8 @@ export class Source {
 
 /** Reads a file and the files it names with `$extends` and `$dsl`. */
 export class SourceLoader {
+  private readonly templates = new Templates();
+
   constructor(private readonly problems: Problems) {}
 
   /** The source for text or data. Undefined when it cannot be read at all; the problems say why. */
@@ -104,8 +107,9 @@ export class SourceLoader {
     return root && new Source(file, root, this, this.problems);
   }
 
-  /** Where a path written in a file points: beside that file. */
+  /** Where a path written in a file points: beside that file, or a template of the package for `scripted-yaml/<name>`. */
   absolute(file: string, path: string): string {
+    if (this.templates.isTemplate(path)) return this.templates.file(path) ?? path;
     return resolve(dirname(file), path);
   }
 
@@ -116,6 +120,10 @@ export class SourceLoader {
       this.problems.error(from, `"${path}" extends itself, directly or through other files`);
       return undefined;
     }
+    if (this.templates.isTemplate(path) && !this.templates.file(path)) {
+      this.problems.error(from, `cannot read "${path}": there is no such template (only ${this.templates.names.map((name) => Templates.prefix + name).join(', ')})`);
+      return undefined;
+    }
     let text: string;
     try {
       text = readFileSync(absolute, 'utf8');
@@ -124,7 +132,8 @@ export class SourceLoader {
       this.problems.error(from, `cannot read "${path}": ${code === 'ENOENT' ? 'the file does not exist' : (error as Error).message}`);
       return undefined;
     }
-    return this.tree(text, join(dirname(from.file), path), [...chain, absolute]);
+    const named = this.templates.isTemplate(path) ? path : join(dirname(from.file), path);
+    return this.tree(text, named, [...chain, absolute]);
   }
 
   private tree(input: unknown, file: string, chain: string[]): MapNode | undefined {

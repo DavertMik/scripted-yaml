@@ -1,6 +1,6 @@
 {
   "name": "scripted-yaml",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "YAML files with marked formulas (FEEL): validate, parse, load, resolve.",
   "license": "MIT",
   "repository": {
@@ -27,6 +27,7 @@
   "files": [
     "dist",
     "skills",
+    "templates",
     "README.md",
     "LICENSE"
   ],

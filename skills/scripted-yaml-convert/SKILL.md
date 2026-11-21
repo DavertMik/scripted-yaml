@@ -49,6 +49,9 @@ In this order, each only as far as the code needs:
 5. **Structure** (`$schema`, `$dsl`): only when several files must have the same shape. One file: none.
 6. **`$tests`**: one per branch of the old code, with the numbers the old code gives.
 
+A state machine, a menu or a form starts from a template of the package (`scripted-yaml templates`),
+not from an empty file.
+
 Leave out: a key nobody reads, a function called once, `$import` of a helper a formula can express,
 comments that repeat the key name.
 

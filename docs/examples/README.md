@@ -17,6 +17,9 @@ written beside it, so the examples cannot drift from what the language does.
 | `5-traps.yml` | mistakes shown wrong and right |
 | `6-domains.yml` | the formulas of the pipelines, shop and router examples |
 
+For whole files built on a base that comes with the package (state machines, menus, forms),
+see [`../templates.md`](../templates.md).
+
 ## The dialect in ten lines
 
 ```

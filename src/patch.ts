@@ -4,8 +4,10 @@ import type { Problems } from './problem.js';
 /** Applies a file that starts with `$extends` to its base. The base tree is changed in place. */
 export class Patch {
   /** Keys of the patch's top level that are merged into the base, not matched against it. */
-  private static readonly merged = ['$vars', '$functions', '$import', '$tests'];
-  private static readonly replaced = ['$dsl', '$schema'];
+  private static readonly merged = ['$vars', '$functions', '$import', '$tests', '$schema'];
+  private static readonly replaced = ['$dsl'];
+  /** The lists of a `$schema` that a patch adds to. */
+  private static readonly fieldLists = ['required', 'optional'];
 
   constructor(
     private readonly patch: MapNode,
@@ -36,9 +38,17 @@ export class Patch {
 
   private merge(entry: Entry): void {
     const target = this.base.get(entry.name)?.value;
-    if (target instanceof MapNode && entry.value instanceof MapNode) for (const item of entry.value.entries) this.put(target, item);
+    if (target instanceof MapNode && entry.value instanceof MapNode) for (const item of entry.value.entries) this.mergeItem(target, item, entry.name);
     else if (target instanceof ListNode && entry.value instanceof ListNode) for (const item of entry.value.items) target.add(item);
     else this.put(this.base, entry);
+  }
+
+  /** One entry of a merged keyword. The `required` and `optional` lists of a `$schema` grow; everything else is put in place. */
+  private mergeItem(target: MapNode, item: Entry, keyword: string): void {
+    const old = target.get(item.name)?.value;
+    const grows = keyword === '$schema' && Patch.fieldLists.includes(item.name) && old instanceof ListNode && item.value instanceof ListNode;
+    if (grows) for (const word of item.value.items) old.add(word);
+    else this.put(target, item);
   }
 
   /** Applies the changes written in one map of the patch to the node of the base they point at. */

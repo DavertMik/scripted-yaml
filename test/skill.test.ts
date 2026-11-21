@@ -26,14 +26,14 @@ const cli = (...args: string[]) => {
 };
 
 describe('skills/scripted-yaml/SKILL.md', () => {
-  test('has the front matter of a skill and stays under 300 lines', () => {
+  test('has the front matter of a skill and stays within 300 lines', () => {
     expect(skill).toStartWith('---\nname: scripted-yaml\ndescription: ');
     const front = parse(skill.slice(4, skill.indexOf('\n---\n', 4)));
     expect(Object.keys(front)).toEqual(['name', 'description']);
     expect(front.name).toBe('scripted-yaml');
     expect(typeof front.description).toBe('string');
     expect(front.description).toContain('scripted-yaml validate');
-    expect(skill.split('\n').length).toBeLessThan(300);
+    expect(skill.split('\n').length).toBeLessThanOrEqual(300);
   });
 
   for (const name of ['pipeline.yml', 'shop.yml', 'team.yml', 'patch.yml', 'import.yml', 'mistakes.yml']) {

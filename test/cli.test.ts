@@ -174,3 +174,13 @@ describe('scripted-yaml skill', () => {
     expect(existsSync(join(project, '.claude'))).toBe(false);
   });
 });
+
+describe('scripted-yaml templates', () => {
+  test('lists the templates of the package, each with what it is for', () => {
+    const run = cli('templates');
+    expect(run.code).toBe(0);
+    const lines = run.out.trimEnd().split('\n');
+    expect(lines.map((line) => line.split(' ')[0])).toEqual(['scripted-yaml/forms', 'scripted-yaml/navigation-ui', 'scripted-yaml/state-machine']);
+    expect(lines[2]).toContain('A state machine');
+  });
+});

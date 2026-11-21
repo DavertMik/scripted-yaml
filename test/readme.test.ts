@@ -40,7 +40,7 @@ class ReadmeExample {
 }
 
 describe('the README examples', () => {
-  for (const name of ['discounts.yml', 'ui.yml', 'rpg.yml']) {
+  for (const name of ['discounts.yml', 'ui.yml', 'rpg.yml', 'order-states.yml', 'menu.yml', 'signup.yml']) {
     test(`${name} is shown word for word and has no problems`, async () => {
       const example = new ReadmeExample(name);
       expect(readme).toContain(example.shown);

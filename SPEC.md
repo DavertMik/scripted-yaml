@@ -448,6 +448,31 @@ stages:
 - The position of a key in the patch means nothing. Order is said with `$before` and `$after`.
 - The library can print the resolved file, with a note on each changed line naming the file that changed it.
 
+**The top keywords of a patch.** `$vars`, `$functions`, `$import`, `$tests` and
+`$schema` of a patch are merged into those of the base, entry by entry: an
+entry with the same name takes the place of the base's. In `$schema`, the
+`required` and `optional` lists of the patch are added to the base's lists, so
+a patch can make a key of its own known. `$dsl` of a patch replaces the base's.
+
+**Templates.** The package carries base files in `templates/`. A path that
+starts with `scripted-yaml/` names one of them, not a file beside this one:
+
+```yaml
+$extends: scripted-yaml/state-machine
+
+$schema:
+  State: [draft, paid]
+
+$replace:
+  transitions:
+    - { from: draft, on: pay, to: paid }
+```
+
+A template brings a schema and formulas and leaves empty the parts the file
+fills with `$replace`. There are three: `state-machine`, `navigation-ui` and
+`forms`; the comment at the top of each says what a file writes and what it
+gets. A name that is not a template is an error that lists them.
+
 Shared bases that are not patched item by item (`extends: _javascript`,
 `common.yml`) keep the rule they have today: maps merge key by key, scalars
 and lists replace.
@@ -485,6 +510,8 @@ relative to the file it is written in:
 | `$dsl: ./pipeline.dsl.yml` | reads and parses that file, checks this one against it |
 | `$extends: ./web-testing.yml` | loads that file the same way, then applies this patch to it |
 | `$import: { ./controllers.ts: [Users] }` | imports the module and takes the names |
+
+A path that starts with `scripted-yaml/` names a template of the package (section 6).
 
 A file reached this way goes through the same validation as the first one,
 and a path that does not exist is a problem reported on the line that names it.

@@ -283,6 +283,173 @@ mail (+6 armor) and a ring of might (+3):
 
 Fields resolve on demand: `stats.hit_points` reads `hero_class` and `attributes.endurance`, regardless of file order.
 
+## Templates
+
+The package carries base files for common jobs. A file builds on one with
+`$extends: scripted-yaml/<name>` and writes only its own part; the template brings the schema and
+the formulas. `scripted-yaml templates` lists them; each is one readable file in [`templates/`](templates).
+[`docs/templates.md`](docs/templates.md) says what each takes and gives, and how to write your own.
+
+| Template | You write | You get |
+|---|---|---|
+| `scripted-yaml/state-machine` | states, transitions with guards, effects | `allowed`, `next`, `changed`, `final`, `error`, the effects to run |
+| `scripted-yaml/navigation-ui` | a menu, with dropdowns up to three levels | `pages`, `active`, `current`, `breadcrumbs`, `sitemap` |
+| `scripted-yaml/forms` | fields with types, labels and tooltips, tabs, rules | `errors`, `valid`, `steps` (fields and error count per tab) |
+
+### State machine: the life of an order
+
+The application keeps the current state, passes it in with the event, and runs the effects it gets back.
+
+```yaml
+$extends: scripted-yaml/state-machine
+
+$schema:
+  State: [draft, paid, shipped, delivered, cancelled, refunded]
+
+$vars:
+  state: { default: draft }
+  order: { about: "total, in_stock" }
+
+$replace:
+  # One row per rule. `$if!` is the guard: a row whose guard fails is not there.
+  transitions:
+    - { from: draft,   on: pay,     to: paid,      $if!: vars.order.total > 0 }
+    - { from: draft,   on: cancel,  to: cancelled }
+    - { from: paid,    on: ship,    to: shipped,   $if!: vars.order.in_stock }
+    - { from: paid,    on: cancel,  to: refunded }
+    - { from: shipped, on: deliver, to: delivered }
+    - { from: shipped, on: return,  to: refunded }
+
+  # What the application does on a transition.
+  effects:
+    - name: receipt
+      run!js: sendReceipt(order)
+      $if!: changed and next = "paid"
+    - name: refund
+      run!js: refundPayment(order)
+      $if!: changed and next = "refunded"
+    - name: audit
+      run!js: audit(order, event)
+      $if!: changed
+
+$tests:
+  - about: Paying a draft order
+    vars: { state: draft, event: pay, order: { total: 50, in_stock: true } }
+    expect: { next: paid, error: null, effects.name: [receipt, audit] }
+  - about: An empty order cannot be paid
+    vars: { state: draft, event: pay, order: { total: 0, in_stock: true } }
+    expect: { allowed: [cancel], next: draft, error: Cannot pay from draft, effects.name: [] }
+  - about: A delivered order is final
+    vars: { state: shipped, event: deliver, order: { total: 50, in_stock: true } }
+    expect: { next: delivered, final: true }
+```
+
+- **A transition is a row**: `from`, `on`, `to`. Its guard is `$if!`: a row whose guard fails is dropped, so `allowed` never offers it.
+- **`State` lists the states**: `to: shiped` is a validation error before anything runs:
+  `transitions[3].to  "shiped" is not one of: draft, paid, shipped, delivered, cancelled, refunded`.
+- **Effects are markers**: the file names what to run on a transition; the application's `js` function decides how.
+
+For a draft order of 50 and the event `pay`, the result holds `allowed: ['pay', 'cancel']`,
+`changed: true`, `next: 'paid'`, `final: false`, `error: null` and the effects `receipt` and `audit`.
+For an empty order `pay` is not allowed: `next` stays `draft`, `effects` is empty and `error` is
+"Cannot pay from draft".
+
+### Navigation: a menu, its breadcrumbs and sitemap
+
+```yaml
+$extends: scripted-yaml/navigation-ui
+
+$vars:
+  user: { optional: true }
+
+$replace:
+  menu:
+    - { label: Home, path: /, icon: home }
+    - label: Products
+      items:
+        - { label: Phones, path: /products/phones }
+        - label: Laptops
+          path: /products/laptops
+          items:
+            - { label: Gaming, path: /products/laptops/gaming }
+    - label: Admin
+      path: /admin
+      $if!: vars.user != null and vars.user.role = "admin"
+    - { label: Docs, url: "https://docs.example.com" }
+```
+
+On `/products/laptops/gaming`, signed out:
+
+```js
+{
+  active: ['Products', 'Laptops', 'Gaming'],          // what to highlight
+  current: 'Gaming',
+  breadcrumbs: [
+    { label: 'Products', path: null },
+    { label: 'Laptops', path: '/products/laptops' },
+    { label: 'Gaming', path: '/products/laptops/gaming' },
+  ],
+  sitemap: ['/', '/products/phones', '/products/laptops', '/products/laptops/gaming'],
+}
+```
+
+`Admin` is in the menu and the sitemap only for an admin. `Docs` is a link out: in the menu, not a page.
+
+### Form: fields, tabs and validation
+
+```yaml
+$extends: scripted-yaml/forms
+
+$replace:
+  title: Sign up
+  submit: Create account
+  tabs:
+    - { id: account, label: Account }
+    - { id: profile, label: Profile }
+  fields:
+    - { name: email, type: email, label: Email, tab: account, required: true, tooltip: We never share it. }
+    - { name: password, type: password, label: Password, tab: account, required: true, min: 8 }
+    - { name: confirm, type: password, label: Repeat the password, tab: account, required: true }
+    - { name: age, type: number, label: Age, tab: profile, min: 18, max: 120 }
+    - { name: plan, type: select, label: Plan, tab: profile, options: [free, team], required: true }
+    - name: company
+      type: text
+      label: Company
+      tab: profile
+      required: true
+      $if!: value("plan") = "team"
+  rules:
+    - field: confirm
+      tab: account
+      message: The passwords differ
+      $if!: value("confirm") != null and value("confirm") != value("password")
+```
+
+The application passes `values` by field name; with none, the file resolves to the empty form. For
+`{ email: 'ada@', password: 'short', confirm: 'other', age: 12, plan: 'team', company: null }`:
+
+```js
+{
+  valid: false,
+  errors: [
+    { field: 'email', tab: 'account', message: 'Email is not an email address' },
+    { field: 'password', tab: 'account', message: 'Password must be at least 8' },
+    { field: 'age', tab: 'profile', message: 'Age must be at least 18' },
+    { field: 'company', tab: 'profile', message: 'Company is required' },
+    { field: 'confirm', tab: 'account', message: 'The passwords differ' },
+  ],
+  steps: [
+    { id: 'account', label: 'Account', fields: ['email', 'password', 'confirm'], errors: 3 },
+    { id: 'profile', label: 'Profile', fields: ['age', 'plan', 'company'], errors: 2 },
+  ],
+}
+```
+
+The template checks `required`, `min` and `max` (the number, or the length of a text), `pattern`,
+`options` and the format of an `email`; a number may arrive as text. `rules` are your checks
+across fields, and `value("plan")` reads what was entered. `company` is a field only while the
+plan is `team`.
+
 ## Multiline text and Markdown
 
 Use `|` for line breaks, `>` for folded text, and `-` to strip the trailing newline.
@@ -395,6 +562,7 @@ result.theme.accent;                                      // "gold"
 scripted-yaml validate <file>... [--markers sh,mdq]
 scripted-yaml parse <file> [--var NAME=value]... [--vars file.json] [--markers sh,mdq]
 scripted-yaml skill [--install [local|global]]
+scripted-yaml templates
 ```
 
 `validate` reports problems (exit 1 on errors). `parse` outputs JSON; markers become
@@ -424,7 +592,8 @@ OpenCode read.
 - [Specification](SPEC.md): schemas, imports, inheritance, evaluation rules, and embedded tests.
 - [Agent skill](skills/scripted-yaml/SKILL.md): authoring and validation instructions.
 - [Conversion skill](skills/scripted-yaml-convert/SKILL.md): moving existing application logic into short YAML files.
-- [Examples](examples): shops, UI, RPG, routing, pipelines, and Markdown.
+- [Templates](docs/templates.md): what each `scripted-yaml/<name>` takes and gives; the files are in [`templates/`](templates).
+- [Examples](examples): shops, UI, RPG, state machines, menus, forms, routing, pipelines, and Markdown.
 
 ## Development
 

@@ -52,6 +52,14 @@ describe('the built package', () => {
     });
   });
 
+  test('the built package finds its templates', async () => {
+    const name = 'scripted-yaml';
+    const built = await import(name);
+    const text = '$extends: scripted-yaml/state-machine\n$schema:\n  State: [on, off]\n$replace:\n  transitions:\n    - { from: on, on: flip, to: off }\n';
+    expect(await new built.ScriptedYaml().validateText(text)).toEqual([]);
+    expect(run(['node', manifest.bin['scripted-yaml'], 'templates']).out).toContain('scripted-yaml/forms');
+  });
+
   test('bun imports "scripted-yaml" by name too', async () => {
     const name = 'scripted-yaml';
     const built = await import(name);

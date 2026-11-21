@@ -5,6 +5,7 @@ import { parseArgs } from 'node:util';
 import { mdq } from 'mdq-cli';
 import { type Marker, type Problem, ScriptedYaml, ScriptedYamlError } from './index.js';
 import { Skills } from './skills.js';
+import { Templates } from './templates.js';
 
 /** A mistake in how the command was called. */
 class UsageError extends Error {}
@@ -155,9 +156,20 @@ class SkillCommand extends Command {
   }
 }
 
+class TemplatesCommand extends Command {
+  readonly usage = 'scripted-yaml templates';
+  private readonly templates = new Templates();
+
+  async run(args: Arguments): Promise<number> {
+    if (args.files.length > 0) throw new UsageError('templates takes no file');
+    for (const name of this.templates.names) console.log(`${(Templates.prefix + name).padEnd(30)}  ${this.templates.about(name)}`);
+    return 0;
+  }
+}
+
 /** The `scripted-yaml` command line: validate files, print one file resolved, or install the agent skills. */
 class Cli {
-  private readonly commands: Record<string, Command> = { validate: new ValidateCommand(), parse: new ParseCommand(), skill: new SkillCommand() };
+  private readonly commands: Record<string, Command> = { validate: new ValidateCommand(), parse: new ParseCommand(), skill: new SkillCommand(), templates: new TemplatesCommand() };
 
   get usage(): string {
     return [
@@ -169,6 +181,8 @@ class Cli {
       '  skill     prints the skills that teach a coding agent to write these files and to move',
       '            application logic into them; --install copies them into .claude/skills and',
       '            .agents/skills of this project (local, the default) or of your home (global)',
+      '  templates lists the base files of the package; a file builds on one with',
+      '            $extends: scripted-yaml/<name>',
       '',
       '  --markers  the marker names the files use (run!sh: is the marker "sh")',
       '             parse shows a marked value as { "marker": "sh", "source": "…" }',

@@ -280,6 +280,8 @@ The result has the stages `install, lint, test, coverage`. Every change says wha
 `$replace` overwrites fields that exist; `$before` / `$after` add items to a list, beside one item,
 or text to a text field; `$add` adds entries to a map; `$remove` drops entries; `base` is the
 inherited value. A plain field in a patch is an error, and so is a key the base does not have.
+`$extends: scripted-yaml/state-machine` (also `navigation-ui`, `forms`) builds on a template of the
+package: run `scripted-yaml templates`, and read the comment at the top of the template first.
 
 ## Checking a file
 

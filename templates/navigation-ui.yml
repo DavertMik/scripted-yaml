@@ -1,0 +1,41 @@
+# Navigation: a menu with dropdowns, and from it the current page, the breadcrumbs and the sitemap.
+#
+# Your file, after `$extends: scripted-yaml/navigation-ui`:
+#   $replace:
+#     menu:
+#       - { label: Home, path: / }
+#       - label: Products                      an item with `items` is a dropdown, up to three levels
+#         items:
+#           - { label: Phones, path: /products/phones }
+#       - { label: Admin, path: /admin, $if!: vars.user.role = "admin" }     shown to some
+#       - { label: Docs, url: "https://docs.example.com" }                   a link out: not a page
+# The application passes `path`, the page the user is on. It is matched exactly: `/products/phones/42`
+# is no page of the menu. Items below the third level are not found.
+
+$schema:
+  required: [menu*:Item]
+  optional: [pages, active, current, breadcrumbs, sitemap]
+  Item:
+    key: label
+    required: [label]
+    optional: [path, url, icon, badge, about, items*:Item]
+
+$vars:
+  path: { default: /, about: The page the user is on. }
+
+$functions:
+  children(list)!: flatten(for entry in list return get value(entry, "items"))[item != null]
+  everything()!: concatenate(menu, children(menu), children(children(menu)))
+  below(entry)!: concatenate(children([entry]), children(children([entry])))
+  at(entry)!: get value(entry, "path") = vars.path
+  trail()!: everything()[at(item) or (some page in below(item) satisfies at(page) and list contains(everything(), page))]
+
+menu: []
+
+# Every item that is a page, dropdowns opened.
+pages!: 'for entry in everything()[get value(item, "path") != null] return { label: entry.label, path: entry.path }'
+# The labels to highlight: from the top item down to the page the user is on.
+active!: trail().label
+current!: if count(active) > 0 then active[-1] else null
+breadcrumbs!: 'for entry in trail() return { label: entry.label, path: get value(entry, "path") }'
+sitemap!: pages.path

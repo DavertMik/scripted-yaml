@@ -1,0 +1,43 @@
+# State machine: the life of an order, on the bundled template. The application keeps the state and runs the effects.
+
+$extends: scripted-yaml/state-machine
+
+$schema:
+  State: [draft, paid, shipped, delivered, cancelled, refunded]
+
+$vars:
+  state: { default: draft }
+  order: { about: "total, in_stock" }
+
+$replace:
+  # One row per rule. `$if!` is the guard: a row whose guard fails is not there.
+  transitions:
+    - { from: draft,   on: pay,     to: paid,      $if!: vars.order.total > 0 }
+    - { from: draft,   on: cancel,  to: cancelled }
+    - { from: paid,    on: ship,    to: shipped,   $if!: vars.order.in_stock }
+    - { from: paid,    on: cancel,  to: refunded }
+    - { from: shipped, on: deliver, to: delivered }
+    - { from: shipped, on: return,  to: refunded }
+
+  # What the application does on a transition.
+  effects:
+    - name: receipt
+      run!js: sendReceipt(order)
+      $if!: changed and next = "paid"
+    - name: refund
+      run!js: refundPayment(order)
+      $if!: changed and next = "refunded"
+    - name: audit
+      run!js: audit(order, event)
+      $if!: changed
+
+$tests:
+  - about: Paying a draft order
+    vars: { state: draft, event: pay, order: { total: 50, in_stock: true } }
+    expect: { next: paid, error: null, effects.name: [receipt, audit] }
+  - about: An empty order cannot be paid
+    vars: { state: draft, event: pay, order: { total: 0, in_stock: true } }
+    expect: { allowed: [cancel], next: draft, error: Cannot pay from draft, effects.name: [] }
+  - about: A delivered order is final
+    vars: { state: shipped, event: deliver, order: { total: 50, in_stock: true } }
+    expect: { next: delivered, final: true }

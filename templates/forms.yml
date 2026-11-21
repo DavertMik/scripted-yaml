@@ -1,0 +1,74 @@
+# Forms: fields with types, labels and tooltips, tabs, and the errors for the values entered.
+#
+# Your file, after `$extends: scripted-yaml/forms`:
+#   $replace:
+#     title: Sign up
+#     tabs:                                    leave out for a form of one page
+#       - { id: account, label: Account }
+#     fields:
+#       - { name: email, type: email, label: Email, tab: account, required: true, tooltip: We never share it. }
+#       - { name: age, type: number, min: 18 }            min and max: the number, or the length of a text
+#       - { name: plan, type: select, options: [free, team] }
+#       - { name: company, type: text, $if!: value("plan") = "team" }         shown to some
+#     rules:                                   checks across fields: the row is an error when `$if!` is true
+#       - { field: confirm, message: The passwords differ, $if!: value("confirm") != value("password") }
+# The application passes `values`, by field name. `value("plan")` reads one: null while it is empty
+# or not passed, so the file resolves with no values at all, to draw the empty form.
+# A number may arrive as text ("42"), as a form sends it.
+
+$schema:
+  required: [fields*:Field]
+  optional: [title, submit, tabs*:Tab, rules*:Rule, errors, valid, steps]
+  Field:
+    key: name
+    required: [name, type:FieldType]
+    optional: [label, tooltip, placeholder, tab, required, min, max, pattern, options*, default]
+  Tab:
+    required: [id, label]
+  Rule:
+    key: field
+    required: [field, message]
+    optional: [tab]
+  FieldType: [text, email, number, password, textarea, select, radio, checkbox, date, file, hidden]
+
+$vars:
+  values: { default: {}, about: "What the user entered, by field name." }
+
+$functions:
+  named(field)!: if get value(field, "label") != null then field.label else field.name
+  # What the user entered in a field; null while it is empty or not passed yet.
+  value(name)!: get value(vars.values, name)
+  # What is wrong with one value: the first check that fails, or null.
+  wrong(field, entered)!: >-
+    {
+      min: get value(field, "min"), max: get value(field, "max"),
+      pattern: get value(field, "pattern"), options: get value(field, "options"),
+      text: if entered = null then "" else if entered instance of string then entered else string(entered),
+      amount: if field.type != "number" then string length(text)
+        else if entered instance of number then entered
+        else if matches(text, "^-?[0-9]+([.][0-9]+)?$") then number(text)
+        else null,
+      result:
+        if entered = null or entered = "" or entered = false then (if get value(field, "required") = true then "is required" else null)
+        else if amount = null then "is not a number"
+        else if field.type = "email" and not(matches(text, "^[^@\\s]+@[^@\\s]+[.][^@\\s]+$")) then "is not an email address"
+        else if min != null and amount < min then "must be at least " + string(min)
+        else if max != null and amount > max then "must be at most " + string(max)
+        else if pattern != null and not(matches(text, pattern)) then "has the wrong format"
+        else if options != null and not(list contains(options, entered)) then "is not one of the options"
+        else null
+    }.result
+  checked()!: 'for entry in fields return { field: entry.name, tab: get value(entry, "tab"), problem: wrong(entry, value(entry.name)), label: named(entry) }'
+  placed(tab_id)!: fields[get value(item, "tab") = tab_id].name
+  failed(tab_id)!: count(errors[tab = tab_id])
+
+title: Form
+submit: Save
+tabs: []
+fields: []
+rules: []
+
+errors!: 'concatenate(for row in checked()[problem != null] return { field: row.field, tab: row.tab, message: row.label + " " + row.problem }, for rule in rules return { field: rule.field, tab: get value(rule, "tab"), message: rule.message })'
+valid!: count(errors) = 0
+# Per tab: its fields and how many errors it holds.
+steps!: 'for step in tabs return { id: step.id, label: step.label, fields: placed(step.id), errors: failed(step.id) }'
