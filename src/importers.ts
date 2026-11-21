@@ -1,16 +1,15 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { extname } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { mdq } from 'mdq-cli';
 import type { Document } from './document.js';
 import type { Entry } from './node.js';
 
-/** One line of `$import`: a path and the names taken from it. */
+/** One line of `$import`: a path, the file it names, and the names taken from it. */
 export class ImportSpec {
   constructor(
     /** The path as written in the file. */
     readonly path: string,
-    readonly absolute: string,
+    /** The name of the file, as `Files` gave it. */
+    readonly file: string,
+    readonly text: string,
     /** What is written beside the path: a list of names, or one name. */
     readonly wanted: unknown,
     readonly entry: Entry,
@@ -30,9 +29,10 @@ export class Imported {
 /** An import that cannot be done. The message is shown on the line of the import. */
 export class ImportFailed extends Error {}
 
-/** What an importer may ask of the library: to load another scripted-yaml file. */
+/** What an importer may ask of the library: another scripted-yaml file, loaded, or the exports of a module. */
 export interface ImportHost {
-  document(absolute: string): Promise<Document>;
+  document(spec: ImportSpec): Document;
+  module(spec: ImportSpec): Promise<Record<string, unknown>>;
 }
 
 /** Brings names from another file into a formula. One importer per kind of file, chosen by extension. */
@@ -42,29 +42,23 @@ export abstract class Importer {
   /** The extensions this importer reads, with the dot. */
   abstract readonly extensions: string[];
 
+  /** True when loading takes a promise: only `load` and `loadText` can do it. */
+  readonly waits: boolean = false;
+
   /** The names a spec brings in, read from the file's text alone. Throws ImportFailed when the spec is wrong. */
   abstract names(spec: ImportSpec): string[];
 
-  /** Opens the file and returns what each name stands for. Throws ImportFailed. */
-  abstract load(spec: ImportSpec, host: ImportHost): Promise<Imported[]>;
+  /** Returns what each name stands for. Throws ImportFailed. */
+  abstract load(spec: ImportSpec, host: ImportHost): Imported[] | Promise<Imported[]>;
 
   static for(path: string): Importer | undefined {
     if (Importer.all.length === 0) Importer.all.push(new ModuleImporter(), new YamlImporter(), new MarkdownImporter());
-    return Importer.all.find((importer) => importer.extensions.includes(extname(path)));
+    return Importer.all.find((importer) => importer.extensions.some((extension) => path.endsWith(extension)));
   }
 
   static get supported(): string[] {
     Importer.for('');
     return Importer.all.flatMap((importer) => importer.extensions);
-  }
-
-  /** A path that does not exist is a problem; where there is no disk, so is every path. */
-  exists(spec: ImportSpec): boolean {
-    try {
-      return existsSync(spec.absolute);
-    } catch {
-      return false;
-    }
   }
 
   protected oneName(spec: ImportSpec): string[] {
@@ -76,6 +70,7 @@ export abstract class Importer {
 /** `.ts` and `.js`: each listed name is an export of the module. */
 export class ModuleImporter extends Importer {
   readonly extensions = ['.ts', '.js'];
+  override readonly waits = true;
 
   names(spec: ImportSpec): string[] {
     const list = typeof spec.wanted === 'string' ? [spec.wanted] : spec.wanted;
@@ -83,10 +78,10 @@ export class ModuleImporter extends Importer {
     return list;
   }
 
-  async load(spec: ImportSpec): Promise<Imported[]> {
+  async load(spec: ImportSpec, host: ImportHost): Promise<Imported[]> {
     let module: Record<string, unknown>;
     try {
-      module = await import(pathToFileURL(spec.absolute).href);
+      module = await host.module(spec);
     } catch (error) {
       throw new ImportFailed(`cannot import "${spec.path}": ${(error as Error).message}`);
     }
@@ -108,9 +103,9 @@ export class YamlImporter extends Importer {
     return this.oneName(spec);
   }
 
-  async load(spec: ImportSpec, host: ImportHost): Promise<Imported[]> {
+  load(spec: ImportSpec, host: ImportHost): Imported[] {
     const [name] = this.names(spec);
-    return [new Imported(name!, await host.document(spec.absolute), true)];
+    return [new Imported(name!, host.document(spec), true)];
   }
 }
 
@@ -122,15 +117,9 @@ export class MarkdownImporter extends Importer {
     return this.oneName(spec);
   }
 
-  async load(spec: ImportSpec): Promise<Imported[]> {
+  load(spec: ImportSpec): Imported[] {
     const [name] = this.names(spec);
-    let text: string;
-    try {
-      text = readFileSync(spec.absolute, 'utf8');
-    } catch (error) {
-      throw new ImportFailed(`cannot read "${spec.path}": ${(error as Error).message}`);
-    }
-    const markdown = mdq(text);
+    const markdown = mdq(spec.text);
     return [new Imported(name!, (selector: string) => markdown.query(selector).text())];
   }
 }

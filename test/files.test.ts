@@ -1,7 +1,7 @@
 // $extends, $schema, $dsl, $tests, and the files in examples/ loaded whole.
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { type Problem, ResolveFailed, ScriptedYaml, ValidationFailed } from '../src/index';
+import { DiskFiles, type Problem, ResolveFailed, ScriptedYaml, ValidationFailed } from '../src/index';
 
 const fixtures = join(import.meta.dir, 'fixtures');
 const examples = join(import.meta.dir, '..', 'examples');
@@ -20,6 +20,14 @@ const scripted = () => new ScriptedYaml({ markers: { sh: (source: string) => new
 const errorsOf = async (text: string, options = { file: 'x.yml' }) => (await scripted().validateText(text, options)).filter((problem) => problem.severity === 'error');
 const messages = (problems: Problem[]) => problems.map((problem) => problem.message).join('\n');
 const failure = (promise: Promise<unknown>) => promise.then(() => undefined).catch((error) => error);
+// biome-ignore lint/suspicious/noExplicitAny: the error is checked by the test
+const catching = (run: () => unknown): any => {
+  try {
+    run();
+  } catch (error) {
+    return error;
+  }
+};
 const patched = (patch: string) => scripted().loadText(`$extends: ./base.yml\n${patch}`, patchFile);
 
 describe('$extends', () => {
@@ -215,15 +223,22 @@ describe('$dsl', () => {
     expect(await document.resolve()).toEqual({ steps: [{ name: 'a', task: 'x' }] });
   });
 
-  test('a rule is checked syntactically at validation and computed at resolve', async () => {
-    expect(await scripted().validateText(steps('  - name: a\n    task: x\n    run!sh: ls\n'), stepsFile)).toEqual([]);
-    const document = await scripted().loadText(steps('  - name: a\n    task: x\n    run!sh: ls\n  - name: b\n'), stepsFile);
-    const error = await failure(document.resolve());
-    expect(error).toBeInstanceOf(ResolveFailed);
-    expect(error.problems.map((problem: Problem) => [problem.key, problem.message])).toEqual([
+  test('a rule whose fields are written out is checked at validation: text with {{ }} and a marked value as written', async () => {
+    const problems = scripted().validateText(steps('  - name: a\n    task: Check {{ vars.URL }}\n    run!sh: ls\n  - name: b\n  - name: c\n    task: Check {{ vars.URL }}\n'), stepsFile);
+    expect(problems.map((problem) => [problem.key, problem.message])).toEqual([
       ['steps.a', 'a step has either task or run'],
       ['steps.b', 'a step has either task or run'],
     ]);
+  });
+
+  test('a rule that reads a formula is computed at resolve', async () => {
+    const text = steps('  - name: a\n    task!: vars.TASK\n    run!sh: ls\n');
+    expect(scripted().validateText(text, stepsFile)).toEqual([]);
+    const document = await scripted().loadText(text, stepsFile);
+    expect(document.resolve({ vars: { TASK: null } }).steps[0].name).toBe('a');
+    const error = catching(() => document.resolve({ vars: { TASK: 'x' } }));
+    expect(error).toBeInstanceOf(ResolveFailed);
+    expect(error.problems.map((problem: Problem) => [problem.key, problem.message])).toEqual([['steps.a', 'a step has either task or run']]);
   });
 
   test('a rule sees a marked field as written: its value is never asked for', async () => {
@@ -390,5 +405,21 @@ describe('the files in examples/', () => {
     expect(result.routes['/api/v1']['/projects/:project'].allow).toBe(true);
     expect(result.routes['/api/v1']['GET /me']({ params: {} })).toBe('Users.me');
     expect(result.routes['/admin'].allow).toBe(false);
+  });
+});
+
+describe('DiskFiles', () => {
+  test('a subclass answers some names itself and leaves the rest to the disk', () => {
+    class Bundled extends DiskFiles {
+      read(path: string, from: string | undefined) {
+        if (path === 'bundled:base') return { file: 'bundled:base', text: 'title: Bundled\nsize: 1\n' };
+        return super.read(path, from);
+      }
+    }
+    const scripted = new ScriptedYaml({ files: new Bundled() });
+    expect(scripted.loadTextSync('$extends: bundled:base\n$replace:\n  size: 2\n', { file: 'mine.yml' }).resolve()).toEqual({ title: 'Bundled', size: 2 });
+    const fromDisk = scripted.validateText('$extends: ./fixtures/base.yml\n', { file: join(import.meta.dir, 'x.yml') });
+    expect(fromDisk.filter((problem) => problem.message.includes('cannot read'))).toEqual([]);
+    expect(scripted.validateText('$extends: ./nope.yml\n', { file: 'x.yml' })[0]!.message).toBe('cannot read "./nope.yml": the file does not exist');
   });
 });

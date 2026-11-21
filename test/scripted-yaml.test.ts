@@ -198,7 +198,7 @@ limit!: if ready then 30 else 10
 
   test('missing required variables are all listed, before anything is computed', async () => {
     const document = await scripted().loadText('$vars:\n  FIRST_NEEDED: {}\n  SECOND_NEEDED: {}\n  NOT_NEEDED: { optional: true }\nsum!: vars.FIRST_NEEDED + vars.SECOND_NEEDED\n', { file: 'x.yml' });
-    const failure = await document.resolve({ vars: {} }).catch((error) => error);
+    const failure = await Promise.resolve().then(() => document.resolve({ vars: {} })).catch((error) => error);
     expect(failure).toBeInstanceOf(ResolveFailed);
     expect(failure.message).toContain('FIRST_NEEDED');
     expect(failure.message).toContain('SECOND_NEEDED');
@@ -288,7 +288,7 @@ shipping:
 
   test('a FEEL warning is an error that names the key', async () => {
     const document = await scripted().loadText('$vars:\n  cart: {}\nbig!: vars.cart.subtotl > 100\n', { file: 'x.yml' });
-    const failure = await document.resolve({ vars: { cart: { subtotal: 120 } } }).catch((error) => error);
+    const failure = await Promise.resolve().then(() => document.resolve({ vars: { cart: { subtotal: 120 } } })).catch((error) => error);
     expect(failure).toBeInstanceOf(ResolveFailed);
     expect(failure.message).toContain('big');
   });
@@ -324,7 +324,7 @@ title!: book("h1")
 
   test('a function that returns a promise is refused when the formula runs', async () => {
     const document = await scripted().loadText('$import:\n  ./host.ts: [promised]\nx!: promised(1)\n', { file });
-    const failure = await document.resolve({ vars: {} }).catch((error) => error);
+    const failure = await Promise.resolve().then(() => document.resolve({ vars: {} })).catch((error) => error);
     expect(failure).toBeInstanceOf(ResolveFailed);
     expect(failure.message).toContain('promised');
   });

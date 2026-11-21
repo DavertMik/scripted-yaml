@@ -112,7 +112,7 @@ class ValidateCommand extends Command {
     for (const file of args.files) {
       let lines: string[];
       try {
-        const problems = await scripted.validateText(this.read(file), { file });
+        const problems = scripted.validateText(this.read(file), { file });
         failed ||= problems.some((problem) => problem.severity === 'error');
         lines = problems.length > 0 ? problems.map((problem) => this.line(problem)) : [`ok       ${file}`];
       } catch (error) {
@@ -134,7 +134,7 @@ class ParseCommand extends Command {
     const vars = args.vars;
     try {
       const document = await new ScriptedYaml({ markers: this.placeholders(args.markers) }).loadText(this.read(file), { file });
-      console.log(JSON.stringify(await document.resolve({ vars }), null, 2));
+      console.log(JSON.stringify(document.resolve({ vars }), null, 2));
       return 0;
     } catch (error) {
       if (error instanceof ScriptedYamlError) console.error(error.problems.map((problem) => this.line(problem)).join('\n'));
@@ -154,7 +154,7 @@ class TestCommand extends Command {
     for (const file of args.files) {
       const lines: string[] = [];
       try {
-        const results = await (await scripted.loadText(this.read(file), { file })).test();
+        const results = (await scripted.loadText(this.read(file), { file })).test();
         if (results.length === 0) lines.push(`no tests ${file}`);
         for (const result of results) {
           failed ||= !result.passed;

@@ -48,6 +48,13 @@ export class Problems {
     this.list.sort((a, b) => files.indexOf(a.file) - files.indexOf(b.file) || a.line - b.line);
   }
 
+  /** Makes every warning an error. */
+  strict(): void {
+    this.list.forEach((problem, index) => {
+      if (problem.severity === 'warning') this.list[index] = new Problem(problem.file, problem.line, problem.column, problem.key, problem.message, 'error');
+    });
+  }
+
   get errors(): Problem[] {
     return this.list.filter((problem) => problem.severity === 'error');
   }
@@ -68,8 +75,13 @@ export abstract class ScriptedYamlError extends Error {
   }
 }
 
-/** Thrown by `parse` and `load` when a file has errors. */
-export class ValidationFailed extends ScriptedYamlError {}
+/** Thrown by `load`, `loadText` and `loadTextSync` when a file has errors. */
+export class ValidationFailed extends ScriptedYamlError {
+  /** One problem with a whole file, such as a file that cannot be read. */
+  static at(file: string, message: string, cause?: unknown): ValidationFailed {
+    return new ValidationFailed([new Problem(file, 0, 0, '', message)], { cause });
+  }
+}
 
 /** Thrown by `resolve` when values are missing or a formula fails. */
 export class ResolveFailed extends ScriptedYamlError {}

@@ -1,8 +1,10 @@
-import { isDeepStrictEqual } from 'node:util';
+import { evaluate } from 'feelin';
 import type { Imported } from './importers.js';
+import { MergedForm } from './merged.js';
 import { type Entry, ListNode, MapNode, type Node } from './node.js';
 import { type Problems, ScriptedYamlError } from './problem.js';
 import { Resolution } from './resolution.js';
+import { Scope } from './scope.js';
 import type { Source } from './source.js';
 import type { Variable } from './variables.js';
 
@@ -23,6 +25,37 @@ export class TestResult {
   }
 }
 
+/**
+ * One marked key of a loaded file: what is written under it, and the value its marker function gave.
+ * The application may set `value` after loading, such as when a check finishes; `resolve` reads it then.
+ */
+export class Marked {
+  constructor(private readonly entry: Entry) {}
+
+  /** The path of the key, as problems name it: `stages.build.check.$value!sh`. */
+  get path(): string {
+    return this.entry.path();
+  }
+
+  get marker(): string {
+    return this.entry.key.marker!;
+  }
+
+  /** The value as written. */
+  get source(): unknown {
+    return this.entry.value.toData();
+  }
+
+  /** What a formula and the result get. A formula reads a boolean as it is; anything else by its `toString()`, with "1" as true and "0" as false. */
+  get value(): unknown {
+    return this.entry.marked?.value;
+  }
+
+  set value(value: unknown) {
+    this.entry.marked = { value };
+  }
+}
+
 /** A loaded file: its data with formulas kept as formulas, and the way to compute them. */
 export class Document {
   /**
@@ -31,6 +64,8 @@ export class Document {
    */
   // biome-ignore lint/suspicious/noExplicitAny: the shape is the file's own
   readonly data: any;
+  /** Every marked key of the file, in order. */
+  readonly marked: Marked[] = [];
 
   constructor(
     readonly file: string,
@@ -39,6 +74,7 @@ export class Document {
     markers: Record<string, Marker | undefined>,
     problems: Problems,
   ) {
+    const scope = new Scope(source);
     const build = (node: Node): unknown => {
       if (node.expression) return node.expression;
       if (node instanceof ListNode) return node.items.map(build);
@@ -46,6 +82,11 @@ export class Document {
       const data: Record<string, unknown> = {};
       for (const entry of node === source.root ? source.data : node.entries) {
         data[entry.name] = entry.key.kind === 'marked' ? this.mark(entry, markers, problems) : build(entry.value);
+        // A replaced entry is not data, but where a formula reads it as `base`, its markers are called too.
+        for (let holder = entry; holder.base && MergedForm.readsBase(scope, holder); holder = holder.base) {
+          if (holder.base.key.kind === 'marked') this.mark(holder.base, markers, problems);
+          else build(holder.base.value);
+        }
       }
       return data;
     };
@@ -62,12 +103,26 @@ export class Document {
    * `$if` / `$unless` / `$each` / `$when` applied. Throws `ResolveFailed`.
    */
   // biome-ignore lint/suspicious/noExplicitAny: the shape is the file's own
-  async resolve(options: { vars?: Record<string, unknown> } = {}): Promise<any> {
+  resolve(options: { vars?: Record<string, unknown> } = {}): any {
     return new Resolution(this.source, this.imports, options.vars ?? {}).run();
   }
 
-  /** Runs the file's `$tests`: each resolves the file with its `vars` and compares the paths under `expect`. */
-  async test(): Promise<TestResult[]> {
+  /**
+   * The file as written, with `$extends` applied: one file that needs no base, as plain data to write
+   * with a YAML library. Keys stay as written (`when!`, `run!sh`, `$vars`) and nothing is computed;
+   * where a formula reads `base`, the entry it replaced is kept under `$base`. It loads and resolves
+   * as the patch does.
+   */
+  merged(): Record<string, unknown> {
+    return MergedForm.write(this.source);
+  }
+
+  /**
+   * Runs the file's `$tests`: each resolves the file with its `vars` and compares the keys under `expect`,
+   * equal as FEEL's `=` says. A key is a path to a key of the file as problems name it
+   * (`stages.write-plan.when`), or a formula.
+   */
+  test(): TestResult[] {
     return this.source.tests.map((test, index) => {
       const { about, vars, expect } = (test ?? {}) as { about?: string; vars?: Record<string, unknown>; expect?: Record<string, unknown> };
       const failures: string[] = [];
@@ -76,7 +131,7 @@ export class Document {
         resolution.run();
         for (const [path, expected] of Object.entries(expect ?? {})) {
           const actual = resolution.probe(path);
-          if (!isDeepStrictEqual(actual, expected)) failures.push(`${path}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+          if (!Document.same(actual, expected)) failures.push(`${path}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
         }
       } catch (error) {
         if (!(error instanceof ScriptedYamlError)) throw error;
@@ -84,6 +139,10 @@ export class Document {
       }
       return new TestResult(about ?? `test ${index + 1}`, failures);
     });
+  }
+
+  private static same(actual: unknown, expected: unknown): boolean {
+    return evaluate('actual = expected', { actual, expected }).value === true;
   }
 
   /** The file as a formula of another file reads it, when it is imported with `$import`. */
@@ -100,6 +159,7 @@ export class Document {
     try {
       const value = marker(entry.value.toData());
       entry.marked = { value };
+      this.marked.push(new Marked(entry));
       return value;
     } catch (error) {
       problems.error(entry, `the function of the marker "${entry.key.marker}" failed: ${(error as Error).message}`);
