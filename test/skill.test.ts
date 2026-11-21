@@ -33,16 +33,16 @@ describe('skills/scripted-yaml/SKILL.md', () => {
     expect(front.name).toBe('scripted-yaml');
     expect(typeof front.description).toBe('string');
     expect(front.description).toContain('scripted-yaml validate');
-    expect(skill.split('\n').length).toBeLessThanOrEqual(300);
+    expect(skill.split('\n').length).toBeLessThanOrEqual(340);
   });
 
-  for (const name of ['pipeline.yml', 'shop.yml', 'team.yml', 'patch.yml', 'import.yml', 'mistakes.yml']) {
+  for (const name of ['pipeline.yml', 'shop.yml', 'mode.yml', 'team.yml', 'patch.yml', 'import.yml', 'mistakes.yml']) {
     test(`shows examples/${name} exactly as the file is`, () => {
       expect(skill).toContain(`\`\`\`yaml\n${read(name)}\`\`\``);
     });
   }
 
-  for (const name of ['pipeline.yml', 'shop.yml', 'team.yml', 'base.yml', 'patch.yml', 'import.yml', 'fixed.yml']) {
+  for (const name of ['pipeline.yml', 'shop.yml', 'mode.yml', 'team.yml', 'base.yml', 'patch.yml', 'import.yml', 'fixed.yml']) {
     test(`examples/${name} has no problem`, async () => {
       expect(await validate(name)).toEqual([]);
     });
@@ -89,6 +89,13 @@ describe('skills/scripted-yaml/SKILL.md', () => {
     expect(skill).toContain('scripted-yaml test <file>');
     expect(skill).toContain('each test is ONE line');
     for (const line of read('shop.yml').split('$tests:\n')[1]!.trimEnd().split('\n')) expect(line).toMatch(/^  - \{ about: .*\}$/);
+  });
+
+  test('mode.yml: its own $tests pass, and ratio() never divides by zero', async () => {
+    const document = await scripted.loadText(read('mode.yml'), { file: join(examples, 'mode.yml') });
+    expect((await document.test()).map((result) => result.failures)).toEqual([[], [], [], [], []]);
+    const result = await document.resolve({ vars: { runner: true } });
+    expect(result.mode.$value).toBe('automated');
   });
 
   test('team.yml: a list item is read by the field its schema names', async () => {

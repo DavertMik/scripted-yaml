@@ -175,6 +175,50 @@ $tests:
   `- { about: …, vars: { … }, expect: { … } }`. Run them with `scripted-yaml test <file>`.
 - **Style of the rules**: block YAML, one key per line. No `- { a: 1, b: 2 }` list items.
 
+## One answer out of many: name the conditions, then pick the first
+
+`$when` applies every case that matches. When only the first should win, name each condition
+in the map and let `$value!` pick, top to bottom:
+
+```yaml
+$vars:
+  suites:     { default: 0 }
+  test_files: { default: 0 }
+  code_files: { default: 0 }
+  runner:     { default: false }
+
+$functions:
+  ratio(part, whole)!: if whole > 0 then part / whole else 0
+
+total!: vars.suites + vars.test_files + vars.code_files
+
+mode:
+  manual!: ratio(vars.suites, total) >= 0.9
+  mixed!: vars.suites > 0 and (vars.test_files > 0 or vars.runner)
+  automated!: vars.runner or ratio(vars.test_files, total) >= 0.5
+  code!: vars.code_files > 0 and vars.code_files = max(vars.code_files, vars.test_files, vars.suites)
+  $value!: >-
+    if manual then "manual"
+    else if mixed then "mixed"
+    else if automated then "automated"
+    else if code then "code"
+    else "files"
+
+$tests:
+  - { about: Almost only suites, vars: { suites: 19, test_files: 1 }, expect: { mode: manual, mode.mixed: true } }
+  - { about: Suites and test files, vars: { suites: 3, test_files: 5 }, expect: { mode: mixed } }
+  - { about: Mostly test files, vars: { test_files: 6, code_files: 4 }, expect: { mode: automated } }
+  - { about: Mostly code, vars: { test_files: 2, code_files: 8 }, expect: { mode: code } }
+  - { about: Nothing at all, vars: {}, expect: { mode: files, total: 0 } }
+```
+
+- `mode` is the text; `mode.code` is one condition, to test or read on its own.
+- **A share is `ratio(part, whole)`**, from 0 to 1; it is 0 when the whole is 0 or null, never an
+  error. A percentage is `ratio(part, whole) * 100`.
+- "The largest of" is `x = max(x, y, z)`, not a chain of `>=`.
+- A condition that reads a variable needs a `default:`: `false or null` is null, and `if null`
+  takes the `else`, silently.
+
 ## `$import`: functions and data from other files
 
 ```yaml
