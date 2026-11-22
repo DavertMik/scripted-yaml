@@ -1,3 +1,4 @@
+import { evaluate } from 'feelin';
 import { Formula } from './expression.js';
 import { Builtins } from './builtins.js';
 import { ListNode, MapNode, type Node, ScalarNode } from './node.js';
@@ -30,6 +31,20 @@ export class Rule {
     readonly message: string,
   ) {
     this.formula = new Formula(source);
+  }
+
+  /** The names of fields the rule reads. */
+  get reads(): string[] {
+    return this.formula.formulas.flatMap((formula) => formula.refs.filter((ref) => !ref.inFilter && !ref.call).map((ref) => ref.head));
+  }
+
+  /** True when the rule holds for these values of the fields. */
+  holds(fields: Record<string, unknown>): boolean {
+    try {
+      return evaluate(this.formula.source, fields).value === true;
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -115,6 +130,32 @@ export class Schema {
       if (!field && !entry.key.keyword) problems.warning(entry, `"${entry.name}" is not a field of the schema`);
       if (field && entry.key.kind === 'plain') this.value(entry.value, field, problems);
     }
+    this.rules(map, shape, problems);
+  }
+
+  /**
+   * The rules whose fields are settled when the file is written: no field they read is a formula.
+   * Text with `{{ }}` and a marked value are seen as written. The others are checked by `resolve`.
+   */
+  private rules(map: MapNode, shape: Shape, problems: Problems): void {
+    if (map.get('$when')) return;
+    for (const rule of shape.rules) {
+      const fields: Record<string, unknown> = {};
+      const settled = rule.reads.every((name) => {
+        const entry = map.get(name);
+        fields[name] = entry ? entry.value.toData() : null;
+        return !entry || entry.key.kind === 'marked' || (entry.key.kind === 'plain' && Schema.settled(entry.value));
+      });
+      if (settled && !rule.holds(fields)) problems.error(map, rule.message);
+    }
+  }
+
+  /** True when a value holds no formula: what is written is what it is. */
+  private static settled(node: Node): boolean {
+    if (node.expression instanceof Formula) return false;
+    if (node instanceof ListNode) return node.items.every(Schema.settled);
+    if (node instanceof MapNode) return node.entries.every((entry) => entry.key.kind === 'marked' || (entry.key.kind === 'plain' && Schema.settled(entry.value)));
+    return true;
   }
 
   private value(node: Node, field: Field, problems: Problems): void {

@@ -28,7 +28,7 @@ class Hint {
   }
 }
 
-/** Validates one source: SPEC 7.2. It runs nothing: no marker function, no formula, no import. */
+/** Validates one source: SPEC 7.2. It runs no marker function and no import, and computes no formula of the file. */
 export class Checker {
   private static readonly structure = ['$value', '$if', '$unless', '$each', '$as', '$when', '$else'];
   private static readonly conditions = ['$if', '$unless', '$each'];
@@ -124,10 +124,14 @@ export class Checker {
       if (Builtins.has(name)) this.problems.error(entry, `the function "${name}" has the name of a FEEL built-in; give it another name`);
       if (this.source.imported.has(name)) this.problems.error(entry, `"${name}" is both defined in $functions and imported`);
     }
+    for (const [name, hosted] of this.source.hosted) {
+      if (Builtins.has(name)) this.problems.error(hosted.entry, `the function "${name}" has the name of a FEEL built-in; give it another name`);
+      if (this.source.imported.has(name)) this.problems.error(hosted.entry, `"${name}" is both declared in $functions and imported`);
+    }
     for (const [name, spec] of this.source.imported) {
       if (Builtins.has(name)) this.problems.error(spec.entry, `the imported name "${name}" is the name of a FEEL built-in; export it under another name`);
     }
-    const taken = (entry: Entry) => !entry.key.keyword && (this.source.functions.has(entry.name) || this.source.imported.has(entry.name));
+    const taken = (entry: Entry) => !entry.key.keyword && (this.source.functions.has(entry.name) || this.source.hosted.has(entry.name) || this.source.imported.has(entry.name));
     const visit = (node: Node): void => {
       if (node instanceof ListNode) node.items.forEach(visit);
       if (!(node instanceof MapNode)) return;

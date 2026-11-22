@@ -57,7 +57,11 @@ export class YamlTextReader extends SourceReader {
   }
 
   private convert(node: YamlNode | null): Node {
-    if (isAlias(node)) return this.convert(node.resolve(this.document) ?? null);
+    if (isAlias(node)) {
+      const target = node.resolve(this.document);
+      if (!target) this.report(node.range?.[0] ?? 0, `the alias *${node.source} names no anchor &${node.source}`, 'error');
+      return this.convert(target ?? null);
+    }
     if (isMap(node)) {
       const map = new MapNode(...this.at(node));
       for (const pair of node.items) {

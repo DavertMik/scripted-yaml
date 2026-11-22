@@ -42,13 +42,13 @@ export class Resolution {
   private readonly scope: Scope;
   private readonly top = new Env();
   private readonly vars: Record<string, unknown>;
-  /** The values of marker results that a formula read: their text, with "1" as true and "0" as false. */
+  /** The values of marker results that a formula read: a boolean as it is, else their text, with "1" as true and "0" as false. */
   private readonly read = new Map<Entry, unknown>();
   private readonly definitions = new Map<Entry, FeelResult>();
   private readonly defining = new Set<Entry>();
   private readonly guards = new Map<string, unknown>();
   private readonly documents = new Map<string, unknown>();
-  /** Imported functions that returned a promise during the formula being computed. */
+  /** Imported or passed functions that returned a promise during the formula being computed. */
   private readonly promised: string[] = [];
   private readonly broken: Problem[] = [];
   private readonly afterwards: (() => void)[] = [];
@@ -57,6 +57,7 @@ export class Resolution {
     private readonly source: Source,
     private readonly imports: Map<string, Imported>,
     private readonly input: Record<string, unknown>,
+    private readonly functions: Record<string, unknown> = {},
   ) {
     this.scope = new Scope(source);
     const { values, missing, mismatches } = source.variables.values(input);
@@ -64,6 +65,8 @@ export class Resolution {
     const at = source.root.get('$vars') ?? source.root;
     if (missing.length > 0) this.fail(at, `missing required variable${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}`);
     if (mismatches.length > 0) this.fail(at, mismatches.join('; '));
+    const wrong = [...source.hosted.values()].map((hosted) => hosted.mismatch(functions[hosted.name])).filter((why) => why !== undefined);
+    if (wrong.length > 0) this.fail(source.root.get('$functions') ?? source.root, wrong.join('; '));
   }
 
   /** The whole file as plain data: no formulas left, structure keywords applied. */
@@ -79,8 +82,17 @@ export class Resolution {
     return this.viewOf(this.source.root, this.top);
   }
 
-  /** Computes one more formula at the top of the file, such as a path under `expect` in `$tests`. */
+  /**
+   * Computes a key under `expect` in `$tests`: a path to a key of the file as problems name it, which may
+   * hold ids with a dash (`stages.write-plan.when`), or else one more formula at the top of the file.
+   */
   probe(source: string): unknown {
+    const [head, ...path] = source.split('.');
+    const start = this.effective(this.source.root, this.top).find((entry) => entry.name === head);
+    if (start && !start.key.keyword) {
+      const reach = this.scope.walk(start, path, (map, name) => this.effective(map, this.top).find((entry) => entry.name === name));
+      if (reach.rest.length === 0) return reach.entry ? this.entryView(reach.entry, this.top) : this.viewOf(reach.node, this.top);
+    }
     const formula = new Formula(source);
     const reader = new ScalarNode(this.source.file, 0, 0, source, source);
     reader.parent = this.source.root;
@@ -132,12 +144,14 @@ export class Resolution {
     return entry.key.kind === 'marked' ? this.markerValue(entry) : this.viewOf(entry.value, env);
   }
 
-  /** A marker's result as a formula reads it: its toString(); "1" is true and "0" is false. Asked once. */
+  /** A marker's result as a formula reads it: a boolean, or its toString(), where "1" is true and "0" is false. Asked once. */
   private markerValue(entry: Entry): unknown {
     if (this.read.has(entry)) return this.read.get(entry);
     const raw = entry.marked?.value;
     let value: unknown = null;
-    if (raw !== null && raw !== undefined) {
+    if (typeof raw === 'boolean') {
+      value = raw;
+    } else if (raw !== null && raw !== undefined) {
       let text: string;
       try {
         text = String(raw);
@@ -217,15 +231,7 @@ export class Resolution {
       const entry = entries.find((candidate) => candidate.name === name);
       context[name] = !entry ? null : entry.key.kind === 'marked' ? entry.value.toData() : this.entryView(entry, env);
     }
-    for (const rule of map.shape.rules) {
-      let valid: unknown;
-      try {
-        valid = evaluate(rule.formula.source, context).value;
-      } catch (error) {
-        valid = (error as Error).message;
-      }
-      if (valid !== true) this.broken.push(this.problem(map, rule.message));
-    }
+    for (const rule of map.shape.rules) if (!rule.holds(context)) this.broken.push(this.problem(map, rule.message));
   }
 
   // ── formulas ──
@@ -256,7 +262,7 @@ export class Resolution {
     }
     if (this.promised.length > 0) {
       const names = this.promised.splice(0).join(', ');
-      this.fail(at, `the function "${names}" returned a promise; a formula cannot wait, so imported functions must be synchronous`);
+      this.fail(at, `the function "${names}" returned a promise; a formula cannot wait, so imported and passed functions must be synchronous`);
     }
     const real = warnings.filter((warning) => !(warning.type === 'NO_PROPERTY_FOUND' && warning.details.values.target === null));
     if (real.length > 0) this.fail(at, [...new Set(real.map((warning) => warning.message))].join('; '));
@@ -291,6 +297,8 @@ export class Resolution {
         context.base = this.entryView(target.entry, env);
       } else if (target.kind === 'function') {
         context[ref.head] = this.definition(target.entry).value;
+      } else if (target.kind === 'hosted') {
+        context[ref.head] = this.guarded(ref.head, this.functions[ref.head]);
       } else if (target.kind === 'import') {
         context[ref.head] = this.imported(ref.head, ref.call);
       } else if (target.kind === 'key' && !(ref.inFilter && target.entry.value === reader)) {
@@ -339,11 +347,17 @@ export class Resolution {
     const imported = this.imports.get(name);
     if (!imported) return null;
     if (imported.document) {
-      if (!this.documents.has(name)) this.documents.set(name, (imported.value as Document).view(this.input));
+      if (!this.documents.has(name)) this.documents.set(name, (imported.value as Document).view(this.input, this.functions));
       return this.documents.get(name);
     }
     const fn = imported.value;
     if (!called || typeof fn !== 'function') return fn;
+    return this.guarded(name, fn);
+  }
+
+  /** A function that is watched when called: it may not return a promise. */
+  private guarded(name: string, fn: unknown): unknown {
+    if (typeof fn !== 'function') return fn;
     if (!this.guards.has(name)) {
       this.guards.set(name, (...args: unknown[]) => {
         const result = fn(...args);

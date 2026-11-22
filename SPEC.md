@@ -43,10 +43,12 @@ types and names. So nothing a file computes may depend on its DSL:
 - a variable the file reads but does not declare is a warning, not an error, and is null unless the application passes it. A DSL can make such names known (`STAGE_DIR`, or any upper-case name), which removes the warning and nothing else.
 
 This holds for functions too. A formula can call only FEEL's built-ins, a
-function defined in the file under `$functions`, or a function the file
-imports. `fileExists(...)` in a pipeline works because that pipeline has
-`$import: { ./pipeline-host.ts: [fileExists] }`. The application cannot slip a
-function in from code.
+function the file defines or declares under `$functions`, or a function the
+file imports. `fileExists(...)` in a pipeline works because that pipeline has
+`$import: { ./pipeline-host.ts: [fileExists] }`, or because it declares
+`fileExists(path): {}` under `$functions` and the application passes it. The
+application cannot slip in a function the file does not name: every name a
+formula calls is written in the file, so `validate` on text alone knows it.
 
 ## 3. Syntax
 
@@ -219,8 +221,8 @@ $vars:
 
 ### 3.7 Functions and `$import`
 
-Besides FEEL's built-ins, a formula may call a function the file defines or
-one it imports. There is no third source.
+Besides FEEL's built-ins, a formula may call a function the file defines,
+one it declares for the application to pass, or one it imports.
 
 **`$functions`** defines helpers in the file. The key is the name with its
 parameters in brackets; the value is the formula. The library splits the key
@@ -235,6 +237,25 @@ $functions:
 
 A parameter must not have the name of a field of the items it filters:
 inside `[ ]` the item's own field wins (`docs/examples/5-traps.yml`).
+
+**A function the application passes** is a key of `$functions` without the
+`!`, as a variable is a key of `$vars`. Its value is a map with `about`, or
+nothing. The application passes the function to `resolve` by name (7.4).
+
+```yaml
+$functions:
+  fileCount(mask):
+    about: How many files match the mask.
+  crowded(mask)!: fileCount(mask) > 2
+
+specs!: fileCount("*.spec.ts")
+```
+
+Such a function has the same rules as an imported one: it is not the name of
+a FEEL built-in, of another function or of a key, and it is synchronous. A
+declared function the application does not pass, or passes as something
+other than a synchronous function, fails `resolve` before anything is
+computed. `validate` checks only that the name is declared.
 
 **`$import`** takes names from another file. The path is relative to the
 file, and the importer is chosen by the file's extension.
@@ -281,8 +302,10 @@ A test is one line: the rules of a file are written out, one key per line, and
 its tests are kept compact below them.
 
 Each test resolves the file with its `vars` and compares the keys under
-`expect` with the computed values; each key under `expect` is itself a
-formula. `$tests` is not part of the file's data. `document.test()` runs them
+`expect` with the computed values, equal as FEEL's `=` says (a map in any key
+order; a number is not its text). A key under `expect` is a path to a key of
+the file, as problems name it, so an id with a dash is fine:
+`stages.write-plan.when`. Any other key is a formula: `count(stages)`. `$tests` is not part of the file's data. `document.test()` runs them
 and returns one result per test.
 On the command line: `scripted-yaml test <file>...` prints `pass` or `FAIL` per test.
 
@@ -385,7 +408,7 @@ See `examples/pipelines/pipeline.dsl.yml`.
 A DSL is for checking only (section 2). It may say that `STAGE_DIR` exists,
 but the value comes from the application, and a default belongs in the
 file's own `$vars`. It does not list markers or functions: markers are
-registered by the application, and functions are imported by each file.
+registered by the application, and functions are declared or imported by each file.
 
 **Types.** TypeScript types are generated from a `$schema`, so the data an
 application gets from `load` and `resolve` is typed. How they are generated
@@ -443,6 +466,25 @@ stages:
 - The position of a key in the patch means nothing. Order is said with `$before` and `$after`.
 - The library can print the resolved file, with a note on each changed line naming the file that changed it.
 
+**The merged form.** `document.merged()` gives a patch with its base applied,
+as one file that needs no base: plain data, keys as written, nothing computed.
+Where a formula or a `{{ }}` reads `base`, the entry it replaced is kept beside
+it under `$base`, and a `$base` holds its own `$base` for a base of a base.
+Reading a file puts each `$base` back, so the merged form loads and resolves as
+the patch did, and can be patched again:
+
+```yaml
+stages:
+  - id: explore
+    when!: base and prerequisites.release
+    $base:
+      when!: prerequisites.staging
+```
+
+An application that holds the base itself, not in a file, passes it:
+`loadTextSync(patch, { base })`, with `base` as text or data. The patch then
+names no `$extends`.
+
 **The top keywords of a patch.** `$vars`, `$functions`, `$import`, `$tests` and
 `$schema` of a patch are merged into those of the base, entry by entry: an
 entry with the same name takes the place of the base's. In `$schema`, the
@@ -477,12 +519,13 @@ and lists replace.
 ## 7. The TypeScript API
 
 The package exports `ScriptedYaml`, `Document`, `Problem`, `ValidationFailed`,
-`ResolveFailed`, `Formula`, `Text`, `TestResult` and `Variable`.
+`ResolveFailed`, `Formula`, `Text`, `TestResult`, `Variable` and `HostFunction`.
 
 ### 7.1 Creating the library object
 
 The application registers its markers. That is the only thing it registers:
-functions come from each file's `$import`.
+functions come from each file's `$import`, or are passed to `resolve` when the
+file declares them under `$functions`.
 
 ```ts
 import { ScriptedYaml } from 'scripted-yaml';
@@ -515,13 +558,14 @@ and a path that does not exist is a problem reported on the line that names it.
 
 ### 7.2 Validating: `validate` and `validateText`
 
-Validation is its own call. It needs no values and runs nothing: no marker
-function, no formula, no import. It takes text, so it works on a file from
+Validation is its own call. It needs no values and runs no marker function and
+no import; the only formulas it computes are schema rules over fields written out
+(8 below). It takes text, so it works on a file from
 disk, a form field or a database row, and it can run in a Cloudflare Worker.
 
 ```ts
-const problems = await scripted.validate('pipelines/web-testing.yml');                       // a file
-const problems = await scripted.validateText(text, { file: 'pipelines/web-testing.yml' });  // text that is not in a file
+const problems = scripted.validate('pipelines/web-testing.yml');                       // a file
+const problems = scripted.validateText(text, { file: 'pipelines/web-testing.yml' });  // text that is not in a file
 
 for (const problem of problems) console.log(problem.toString());
 // pipelines/web-testing.yml:14  prerequisites.staging.$value!  unknown name "var"; did you mean "vars"?
@@ -540,7 +584,7 @@ class Problem {
 }
 ```
 
-What it checks, in order:
+All of it is synchronous. What it checks, in order:
 
 1. the text is valid YAML with unique keys;
 2. every `$` key is a known keyword, and `key` and `key!` do not both exist;
@@ -548,7 +592,11 @@ What it checks, in order:
 4. every formula and every `{{ }}` is valid FEEL;
 5. every name in a formula is a key of the file, a declared variable, a FEEL built-in, or a function the file defines or imports;
 6. the file fits its `$schema` or its `$dsl`;
-7. every target of an `$extends` patch exists in the base.
+7. every target of an `$extends` patch exists in the base;
+8. every `rules:` entry of the schema holds, on each item where no field the rule reads is a `key!` formula, and the item has no `$when`. Text with `{{ }}` and a marked value are seen as written, as `resolve` sees a marked value. The other items are checked by `resolve`.
+
+A field the schema does not list is a warning. With `new ScriptedYaml({ strict: true })`,
+every warning is an error, and a file with one does not load.
 
 Where only checking is needed (the hub, an editor), markers may be given by
 name alone. Function names need nothing: they are in the file's `$import`.
@@ -557,17 +605,38 @@ name alone. Function names need nothing: they are in the file's `$import`.
 const checker = new ScriptedYaml({ markers: ['sh'] });
 ```
 
-**Where there is no disk.** Text that names no other file validates
-anywhere. A `$dsl`, `$extends` or `$import` line is followed by reading the
-disk, so in a place without one (a Cloudflare Worker) such a line is a
-problem reported on that line. There is no setting to redirect it.
+**Where there is no disk.** The library reads every file through a `Files`
+object. `scripted-yaml` reads the disk with `DiskFiles`. `scripted-yaml/core`
+is the same library without Node: it imports no `node:` module, so it bundles
+for a browser or a Cloudflare Worker, and it reads only the files it is given.
+
+```ts
+import { Files, MemoryFiles, ScriptedYaml } from 'scripted-yaml/core';
+
+const scripted = new ScriptedYaml({ files: new MemoryFiles({ 'base.yml': text }) });
+
+class Pipelines extends Files {
+  // `path` as written, `from` the name of the file that writes it (undefined for the first file).
+  read(path: string, from: string | undefined) {
+    if (path in this.saved && from !== `saved:${path}`) return { file: `saved:${path}`, text: this.saved[path] };
+    if (path in bundled) return { file: `bundled:${path}`, text: bundled[path] };
+    throw new Error(`no pipeline "${path}" to extend`);   // reported on the line that names it
+  }
+}
+```
+
+`read` gives the file's text and the name it goes by. That name is in the
+problems, it is the `from` of the paths it names in turn, and two files with
+one name are one file when the library looks for a file that extends itself.
+Undefined means there is no such file. A `.js` or `.ts` module of `$import`
+comes from `files.module()`, which only `DiskFiles` has.
 
 **What `validate` cannot check.** It runs no marker function, so it sees
 nothing behind a marker: a shell command with a mistake, an mdq selector
 that matches nothing, a `{{ }}` formula inside Markdown that a marker will
 return. Those surface when the file is loaded, or when the application
-runs what the marker produced. It also does not open imported files, so it
-does not know whether `./controllers.ts` really exports `Users`.
+runs what the marker produced. It reads imported files but does not load them,
+so it does not know whether `./controllers.ts` really exports `Users`.
 
 ### 7.3 Loading: `load` and `loadText`
 
@@ -577,7 +646,9 @@ const document = await scripted.loadText(text, { file: 'pipelines/web-testing.ym
 ```
 
 Both validate first and throw `ValidationFailed`, carrying the `problems`,
-when there is an error. Then, once per file:
+when there is an error. `loadTextSync` does the same without a promise; only
+importing a `.js` or `.ts` module takes one, so such an import is a problem
+there. Then, once per file:
 
 - `$extends` is applied;
 - each `$import` is loaded;
@@ -615,13 +686,14 @@ There is one call. The application passes every variable the file needs and
 gets the whole file back as plain data, with every formula computed.
 
 ```ts
-const result = await document.resolve({ vars: process.env });
+const result = document.resolve({ vars: process.env });
 
 result.stages[0].when;        // true
 result.stages[0].task;        // the text, with every {{ }} filled in
 ```
 
 - **All variables.** `vars` is checked against the file's `$vars` first. A required variable that is missing is an error that lists all the missing ones, before anything is computed.
+- **All declared functions.** `functions` holds, by name, each function the file declares under `$functions` without a formula: `document.resolve({ vars, functions: { fileCount } })`. One that is missing, not a function, or async is an error before anything is computed. `document.functions` lists them, with their parameters and `about`. `document.test({ functions })` passes them to every test, and an imported scripted-yaml file gets them too.
 - **All values.** Every `key!` holds its value, every `{{ }}` is filled in, and `$if` / `$unless` / `$each` / `$when` are applied. The result contains no formulas.
 - **One pass, by reference.** Formulas are computed in the order they refer to each other (3.5), each once.
 - **Marked keys are unchanged unless a formula read them.** What a marker function returned at load is in the result as it is: a `ShellCommand` stays a `ShellCommand`. One that a formula read holds the value that was read (see below).
@@ -649,9 +721,15 @@ stages:
     run!sh: npx explorbot test plan.md                           # nothing reads this
 ```
 
-When a formula reads a value a marker function returned, the library calls
-that value's `toString()` and gives the formula the text. Two texts have a
-meaning of their own: `"1"` is true and `"0"` is false. Any other text stays text.
+When a formula reads a value a marker function returned, the library gives a
+boolean as it is; for anything else it calls the value's `toString()` and gives
+the formula the text. Two texts have a meaning of their own: `"1"` is true and
+`"0"` is false. Any other text stays text.
+
+The application may also give a marked key its value after loading, such as
+when it ran the checks itself, with a promise: `document.marked` lists every
+marked key (`path`, `marker`, `source`), and setting its `value` is what the
+next `resolve` reads.
 
 - `can_explore` reads `browser`, so `browser.toString()` is called. The application's `ShellCommand` runs the command there and returns `"1"` when it exits 0, `"0"` otherwise. The formula sees `true` or `false`, and so does the result.
 - No formula reads `stages.explore.run`. `toString()` is not called, and the result holds the `ShellCommand` as it is.
@@ -782,7 +860,7 @@ class PipelineRun {
   ) {}
 
   async start() {
-    const result = await this.pipeline.resolve({ vars: process.env });
+    const result = this.pipeline.resolve({ vars: process.env });
 
     for (const stage of result.stages) {
       if (stage.when === false) continue;
@@ -807,7 +885,7 @@ The hub checks a pipeline a user typed, with marker names only:
 
 ```ts
 const checker = new ScriptedYaml({ markers: ['sh'] });
-const problems = await checker.validateText(request.body, { file: 'my-pipeline.yml' });
+const problems = checker.validateText(request.body, { file: 'my-pipeline.yml' });
 ```
 
 ## 9. Example: Markdown with front matter
@@ -891,7 +969,7 @@ pipeline.data.stages[0].task;
 pipeline.data.stages[1].checks;
 // "- Cover the changed pages first.\n- Skip anything behind a feature flag."
 
-const result = await pipeline.resolve({ vars: { EXPLORBOT_URL: 'https://staging.example.com' } });
+const result = pipeline.resolve({ vars: { EXPLORBOT_URL: 'https://staging.example.com' } });
 
 result.stages[1].when;      // true   (false when EXPLORBOT_URL is null)
 result.stages[1].task;
@@ -932,7 +1010,8 @@ Where the code settles something this text left open:
 - One formula cannot read a node's `$value` and a key beside it (`check` and `check.message`).
 - A formula that reads a key and also declares a local of the same name does not get the key.
 - An omitted `type` in `$vars` is not checked; `text`, `number`, `boolean` and `list` are checked when written; a named type is ignored.
-- `rules:` of a schema are checked for syntax and names at validation and computed in `resolve`.
+- `rules:` of a schema are checked for syntax and names at validation. They are computed at validation on items whose fields hold no formula, and in `resolve` on the others.
+- A list field takes a list: one value written alone is an error, not a list of one.
 - An imported YAML file is loaded as scripted-yaml and resolved with the importing file's variables.
 - Text added by a patch with `$before` / `$after` is joined with a new line.
 - Markers given by name only can validate but not parse.
@@ -953,7 +1032,7 @@ on Node 22.21 and on Bun).
 
 **Decided** (2026-11-20).
 
-1. A function a formula calls comes only from FEEL, `$functions` or `$import`. The application passes none.
+1. A function a formula calls comes only from FEEL, `$functions` or `$import`. The application passes only the functions a file declares under `$functions` (changed 2026-11-22; until then it passed none).
 2. `$import` has built-in importers for `.ts`, `.js`, `.yml` / `.yaml` and `.md`, chosen by extension. Any other extension is an error.
 3. Imported functions are synchronous, and the library enforces it.
    Validation of a formula is its syntax and whether its names are defined. Nothing else, and nothing is evaluated.

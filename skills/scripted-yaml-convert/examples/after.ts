@@ -10,7 +10,7 @@ export class Billing {
 
   async invoice(id: string): Promise<number> {
     const account = await this.store.account(id);
-    const { total } = await (await this.pricing).resolve({ vars: { account } });
+    const { total } = (await this.pricing).resolve({ vars: { account } });
     await this.store.saveInvoice(id, total);
     return total;
   }

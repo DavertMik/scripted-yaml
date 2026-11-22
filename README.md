@@ -545,7 +545,7 @@ const scripted = new ScriptedYaml({
   markers: { mdq: (selector) => markdown.query(selector).text() },
 });
 const document = await scripted.loadText(markdown.frontmatter(), { file });
-const result = await document.resolve({ vars: { subtotal: 1200 } });
+const result = document.resolve({ vars: { subtotal: 1200 } });
 ```
 
 The library receives front matter, not the whole Markdown file. The handler returns the selected
@@ -567,7 +567,7 @@ const scripted = new ScriptedYaml({
   markers: { js: (source: string) => new Script(source) },
 });
 
-const problems = await scripted.validate('ui.yml');       // checks the file; runs nothing
+const problems = scripted.validate('ui.yml');       // checks the file; runs nothing
 for (const problem of problems) console.log(problem.severity, problem.toString());
 // error ui.yml:10  paid!  unknown name "var"; did you mean "vars"?
 
@@ -576,7 +576,7 @@ document.data.paid.source;                                // 'vars.plan != "free
 document.data.paid.reads;                                 // ["vars.plan"]
 document.data.sidebar[2].action;                          // Script { js: "openCheckout()" }
 
-const result = await document.resolve({ vars: { plan: 'team' } });   // all variables in, all values out
+const result = document.resolve({ vars: { plan: 'team' } });   // all variables in, all values out
 result.paid;                                              // true
 result.theme.accent;                                      // "gold"
 ```
@@ -586,11 +586,32 @@ result.theme.accent;                                      // "gold"
 | `validate(path)` | Problems with file, location, key, and severity; no evaluation |
 | `load(path)` | Validated document with imports and markers loaded; formulas unevaluated |
 | `validateText` / `loadText` | Same operations on YAML text or parsed data; `{ file }` sets the path context |
-| `document.resolve({ vars })` | Resolved data; throws `ResolveFailed` on evaluation errors |
-| `document.test()` | Results of the file's `$tests` |
+| `loadTextSync` | `loadText` without a promise; a `.js` / `.ts` `$import` is a problem there |
+| `loadTextSync(patch, { base })` | Applies a patch to a base given as text or data |
+| `document.resolve({ vars, functions })` | Resolved data; throws `ResolveFailed` on evaluation errors. `functions` passes the functions the file declares under `$functions` |
+| `document.test({ functions })` | Results of the file's `$tests` |
+| `document.merged()` | The file with `$extends` applied, as one file: keys as written, nothing computed |
+| `document.marked` | Each marked key; set its `value` after load, and `resolve` reads it |
 | `document.variables` | Declared inputs |
+| `document.functions` | Functions the file declares for the application to pass |
 
-`load` throws `ValidationFailed` with `.problems` on validation errors.
+Only `load` and `loadText` return a promise: they import modules. `load` throws
+`ValidationFailed` with `.problems` on validation errors. `new ScriptedYaml({ strict: true })`
+makes every warning an error.
+
+**Without Node.** `scripted-yaml/core` is the same library with no `node:` import, for a
+browser or a Worker. It reads the files that `$extends`, `$dsl` and `$import` name from the
+`files` it is given:
+
+```ts
+import { MemoryFiles, ScriptedYaml } from 'scripted-yaml/core';
+
+const scripted = new ScriptedYaml({ files: new MemoryFiles({ 'base.yml': baseText }) });
+const document = scripted.loadTextSync('$extends: base.yml\n…', { file: 'mine.yml' });
+```
+
+A class that extends `Files` reads from anywhere: its `read(path, from)` returns
+`{ file, text }`, undefined for no such file, or throws with its own message.
 
 ## The command line
 

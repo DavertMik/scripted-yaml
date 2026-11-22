@@ -158,6 +158,6 @@ export class Patch {
     const joined = where === 'start' ? `${added.source}\n${now.value}` : `${now.value.trimEnd()}\n${added.source}`;
     const at = holder.map.entries.indexOf(holder);
     holder.map.remove(holder);
-    holder.map.set(holder.key.raw, new ScalarNode(entry.file, entry.line, entry.column, joined, joined), holder, at);
+    holder.map.set(holder.key.raw, new ScalarNode(entry.file, entry.line, entry.column, joined, joined), holder, at).base = holder.base;
   }
 }

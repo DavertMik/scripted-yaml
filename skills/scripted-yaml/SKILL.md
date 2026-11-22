@@ -168,6 +168,8 @@ $tests:
 ```
 
 - **`$functions`**: `name(parameters)!: formula`. Not the name of a FEEL built-in or of a key.
+  Without the `!`, the key declares a function the application passes, as `$vars` declares a
+  variable: `fileCount(mask):` with an `about:` map under it, or nothing. It needs no `$import`.
 - **`$if!` / `$unless!`** keep or drop the list item or map they sit in. They must give true or false.
 - **`$each!`** repeats a list item per value, named by `$as`; `$if!` beside it is checked per value.
 - **`$when`** changes keys of its map: every matching case applies, in order; `$else` when none did.
@@ -192,7 +194,7 @@ releases!: handbook("section(/^Releases/) paragraph")
 `scripted-yaml parse import.yml` gives `path` as `"/pages/summer-sale"`, `free_from` as
 `"Free shipping from 50 EUR"` and `releases` as `"We release on Tuesdays.\n"`.
 
-A formula calls only FEEL built-ins, `$functions` and imported names. Imported functions are
+A formula calls only FEEL built-ins, `$functions` (defined or declared) and imported names. Imported functions are
 synchronous. Paths are relative to the file. In an `mdq` selector inside a formula, match text
 with a regular expression (`section(/^Releases/)`): double quotes would end the FEEL text.
 
