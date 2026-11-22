@@ -3,31 +3,18 @@ import type { Problems } from './problem.js';
 import { Scope } from './scope.js';
 import type { Source } from './source.js';
 
-/**
- * A file with `$extends` applied, written as one file that needs no base. Keys stay as written and
- * nothing is computed. Where a patch replaced an entry that a formula reads as `base`, the replaced
- * entry is kept beside it, under `$base`, so `base` means what it meant:
- *
- *     when!: base and prerequisites.release
- *     $base:
- *       when!: prerequisites.local
- *
- * A `$base` holds the replaced entries of its map by name, and its own `$base` holds theirs.
- * Reading a file puts each one back as the base of its entry; `$base` is not data.
- */
+/** `document.merged()`: where a formula reads `base`, the replaced entry is kept under `$base`. */
 export class MergedForm {
   static readonly keyword = '$base';
 
   constructor(private readonly problems: Problems) {}
 
-  /** The merged form of a checked source, as plain data. */
   static write(source: Source): Record<string, unknown> {
     const scope = new Scope(source);
     const reads = (entry: Entry): boolean => MergedForm.readsBase(scope, entry);
     return MergedForm.map(source.root, reads);
   }
 
-  /** Puts back each `$base` of a tree that was read, in every map, and takes it out of the data. */
   restore(node: Node): void {
     if (node instanceof ListNode) for (const item of node.items) this.restore(item);
     if (!(node instanceof MapNode)) return;
@@ -38,7 +25,6 @@ export class MergedForm {
     this.attach(node, kept, (name) => node.get(name));
   }
 
-  /** Makes each entry of a `$base` the base of the entry with its name; `find` looks the names up. */
   private attach(holder: MapNode, kept: Entry, find: (name: string) => Entry | undefined): void {
     if (!(kept.value instanceof MapNode)) return this.problems.error(kept, `${MergedForm.keyword} holds the replaced entries of its map, by name`);
     const bases = new Map<string, Entry>();
@@ -50,7 +36,6 @@ export class MergedForm {
         continue;
       }
       this.restore(item.value);
-      // Like an entry a patch replaced: it belongs to the map, and is not one of its entries.
       target.base = new Entry(item.key.raw, item.value, holder, item.file, item.line, item.column);
       bases.set(item.name, target.base);
     }
@@ -86,7 +71,6 @@ export class MergedForm {
     return node.toData();
   }
 
-  /** True when a formula under the entry reads `base` and means this entry's base. */
   static readsBase(scope: Scope, entry: Entry): boolean {
     const visit = (node: Node): boolean => {
       for (const formula of node.expression?.formulas ?? []) {

@@ -42,7 +42,7 @@ export class Resolution {
   private readonly scope: Scope;
   private readonly top = new Env();
   private readonly vars: Record<string, unknown>;
-  /** The values of marker results that a formula read: a boolean as it is, else their text, with "1" as true and "0" as false. */
+  /** The values of marker results that a formula read. */
   private readonly read = new Map<Entry, unknown>();
   private readonly definitions = new Map<Entry, FeelResult>();
   private readonly defining = new Set<Entry>();
@@ -82,10 +82,7 @@ export class Resolution {
     return this.viewOf(this.source.root, this.top);
   }
 
-  /**
-   * Computes a key under `expect` in `$tests`: a path to a key of the file as problems name it, which may
-   * hold ids with a dash (`stages.write-plan.when`), or else one more formula at the top of the file.
-   */
+  /** Computes a key under `expect` in `$tests`: a path, or else a formula. */
   probe(source: string): unknown {
     const [head, ...path] = source.split('.');
     const start = this.effective(this.source.root, this.top).find((entry) => entry.name === head);
@@ -144,7 +141,7 @@ export class Resolution {
     return entry.key.kind === 'marked' ? this.markerValue(entry) : this.viewOf(entry.value, env);
   }
 
-  /** A marker's result as a formula reads it: a boolean, or its toString(), where "1" is true and "0" is false. Asked once. */
+  /** A marker's result as a formula reads it. Asked once. */
   private markerValue(entry: Entry): unknown {
     if (this.read.has(entry)) return this.read.get(entry);
     const raw = entry.marked?.value;

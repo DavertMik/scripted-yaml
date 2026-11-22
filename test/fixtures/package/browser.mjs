@@ -1,5 +1,3 @@
-// Bundled for a browser by test/package.test.ts, then run. A browser build of "scripted-yaml" is its
-// core: the files are in memfs, and nothing is asynchronous.
 import { Volume } from 'memfs';
 import { ScriptedYaml } from 'scripted-yaml';
 

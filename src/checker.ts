@@ -28,7 +28,7 @@ class Hint {
   }
 }
 
-/** Validates one source: SPEC 7.2. It runs no marker function and no import, and computes no formula of the file. */
+/** Validates one source: SPEC 7.2. */
 export class Checker {
   private static readonly structure = ['$value', '$if', '$unless', '$each', '$as', '$when', '$else'];
   private static readonly conditions = ['$if', '$unless', '$each'];

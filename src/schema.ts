@@ -33,12 +33,10 @@ export class Rule {
     this.formula = new Formula(source);
   }
 
-  /** The names of fields the rule reads. */
   get reads(): string[] {
     return this.formula.formulas.flatMap((formula) => formula.refs.filter((ref) => !ref.inFilter && !ref.call).map((ref) => ref.head));
   }
 
-  /** True when the rule holds for these values of the fields. */
   holds(fields: Record<string, unknown>): boolean {
     try {
       return evaluate(this.formula.source, fields).value === true;
@@ -133,10 +131,6 @@ export class Schema {
     this.rules(map, shape, problems);
   }
 
-  /**
-   * The rules whose fields are settled when the file is written: no field they read is a formula.
-   * Text with `{{ }}` and a marked value are seen as written. The others are checked by `resolve`.
-   */
   private rules(map: MapNode, shape: Shape, problems: Problems): void {
     if (map.get('$when')) return;
     for (const rule of shape.rules) {
@@ -150,7 +144,6 @@ export class Schema {
     }
   }
 
-  /** True when a value holds no formula: what is written is what it is. */
   private static settled(node: Node): boolean {
     if (node.expression instanceof Formula) return false;
     if (node instanceof ListNode) return node.items.every(Schema.settled);

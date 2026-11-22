@@ -33,14 +33,9 @@ export class TestResult {
   }
 }
 
-/**
- * One marked key of a loaded file: what is written under it, and the value its marker function gave.
- * The application may set `value` after loading, such as when a check finishes; `resolve` reads it then.
- */
 export class Marked {
   constructor(private readonly entry: Entry) {}
 
-  /** The path of the key, as problems name it: `stages.build.check.$value!sh`. */
   get path(): string {
     return this.entry.path();
   }
@@ -49,12 +44,10 @@ export class Marked {
     return this.entry.key.marker!;
   }
 
-  /** The value as written. */
   get source(): unknown {
     return this.entry.value.toData();
   }
 
-  /** What a formula and the result get. A formula reads a boolean as it is; anything else by its `toString()`, with "1" as true and "0" as false. */
   get value(): unknown {
     return this.entry.marked?.value;
   }
@@ -72,7 +65,6 @@ export class Document {
    */
   // biome-ignore lint/suspicious/noExplicitAny: the shape is the file's own
   readonly data: any;
-  /** Every marked key of the file, in order. */
   readonly marked: Marked[] = [];
 
   constructor(
@@ -90,7 +82,6 @@ export class Document {
       const data: Record<string, unknown> = {};
       for (const entry of node === source.root ? source.data : node.entries) {
         data[entry.name] = entry.key.kind === 'marked' ? this.mark(entry, markers, problems) : build(entry.value);
-        // A replaced entry is not data, but where a formula reads it as `base`, its markers are called too.
         for (let holder = entry; holder.base && MergedForm.readsBase(scope, holder); holder = holder.base) {
           if (holder.base.key.kind === 'marked') this.mark(holder.base, markers, problems);
           else build(holder.base.value);
@@ -120,22 +111,11 @@ export class Document {
     return new Resolution(this.source, this.imports, options.vars ?? {}, options.functions).run();
   }
 
-  /**
-   * The file as written, with `$extends` applied: one file that needs no base, as plain data to write
-   * with a YAML library. Keys stay as written (`when!`, `run!sh`, `$vars`) and nothing is computed;
-   * where a formula reads `base`, the entry it replaced is kept under `$base`. It loads and resolves
-   * as the patch does.
-   */
   merged(): Record<string, unknown> {
     return MergedForm.write(this.source);
   }
 
-  /**
-   * Runs the file's `$tests`: each resolves the file with its `vars` and compares the keys under `expect`,
-   * equal as FEEL's `=` says. A key is a path to a key of the file as problems name it
-   * (`stages.write-plan.when`), or a formula. The functions the file declares for the application
-   * to pass are given as `functions`, the same for every test.
-   */
+  /** Runs the file's `$tests`. */
   test(options: { functions?: Record<string, unknown> } = {}): TestResult[] {
     return this.source.tests.map((test, index) => {
       const { about, vars, expect } = (test ?? {}) as { about?: string; vars?: Record<string, unknown>; expect?: Record<string, unknown> };

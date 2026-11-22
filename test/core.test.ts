@@ -1,5 +1,3 @@
-// The library where there is no disk: files given by the application, the synchronous API,
-// the merged form of a patch, and what validation and $tests settle without resolving.
 import { describe, expect, test } from 'bun:test';
 import { stringify } from 'yaml';
 import { Volume } from 'memfs';
@@ -17,10 +15,8 @@ const catching = (run: () => unknown): any => {
 
 const messages = (problems: { key: string; message: string }[]) => problems.map((problem) => `${problem.key}  ${problem.message}`);
 
-/** Files in memory, by path, for `fs`. */
 const memory = (files: Record<string, string>) => Volume.fromJSON(files, '/');
 
-/** A user's pipelines beside the bundled ones: a user's `regression` may extend the bundled `regression`. */
 const pipelines = memory({
   '/bundled/pipeline.dsl.yml': '$schema:\n  required: [stages*:Stage]\n  Stage:\n    required: [id]\n    optional: [when, run]\n',
   '/bundled/regression.yml': '$dsl: pipeline.dsl.yml\nstages:\n  - id: write-plan\n    when!: true\n  - id: test-cases\n    when!: false\n',

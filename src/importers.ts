@@ -3,12 +3,11 @@ import { mdq } from 'mdq-cli';
 import type { Document } from './document.js';
 import type { Entry } from './node.js';
 
-/** One line of `$import`: a path, the file it names, and the names taken from it. */
+/** One line of `$import`: a path and the names taken from it. */
 export class ImportSpec {
   constructor(
     /** The path as written in the file. */
     readonly path: string,
-    /** The name of the file, as it was read. */
     readonly file: string,
     readonly text: string,
     /** What is written beside the path: a list of names, or one name. */
@@ -30,10 +29,6 @@ export class Imported {
 /** An import that cannot be done. The message is shown on the line of the import. */
 export class ImportFailed extends Error {}
 
-/**
- * What an importer may ask of the library: another scripted-yaml file, loaded, or the exports of a
- * module. Both are `gensync` handlers, so one importer serves `loadTextSync` and `loadText`.
- */
 export interface ImportHost {
   document(spec: ImportSpec): Handler<Document>;
   module(spec: ImportSpec): Handler<Record<string, unknown>>;
@@ -118,7 +113,6 @@ export class MarkdownImporter extends Importer {
     return this.oneName(spec);
   }
 
-  // biome-ignore lint/correctness/useYield: reading Markdown waits for nothing
   *load(spec: ImportSpec): Handler<Imported[]> {
     const [name] = this.names(spec);
     const markdown = mdq(spec.text);

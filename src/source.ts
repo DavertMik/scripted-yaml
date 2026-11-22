@@ -1,4 +1,4 @@
-import type { FileReader, FileText } from './files.js';
+import { basename, dirname, isAbsolute, join, resolve } from 'pathe';
 import { HostFunction } from './functions.js';
 import { Importer, ImportFailed, ImportSpec } from './importers.js';
 import { MergedForm } from './merged.js';
@@ -117,41 +117,66 @@ export class Source {
   }
 }
 
-/** Reads a file and the files it names with `$extends` and `$dsl`, through the application's file system. */
+export interface FileSystem {
+  readFileSync(path: string, encoding: 'utf8'): { toString(): string };
+  readdirSync(path: string): unknown[];
+}
+
+const TEMPLATE = 'scripted-yaml/';
+
+/** Reads a file and the files it names with `$extends` and `$dsl`. */
 export class SourceLoader {
   constructor(
     private readonly problems: Problems,
-    private readonly files: FileReader,
+    private readonly fs?: FileSystem,
+    private readonly templates?: string,
   ) {}
 
-  /**
-   * The source for text or data. Undefined when it cannot be read at all; the problems say why.
-   * With `base`, the input is a patch of that text or data, as if it named it with `$extends`.
-   */
   load(input: unknown, file: string, base?: { file: string; text: unknown }): Source | undefined {
-    const chain = [this.files.key(file)];
+    const chain = [resolve(file)];
     const root = base ? this.patched(input, file, base, chain) : this.tree(input, file, chain);
     return root && new Source(file, root, this, this.problems);
   }
 
-  /** A file another file names. A problem is reported on the line that names it. */
-  find(from: Entry, path: string, purpose: 'read' | 'import' = 'read'): FileText | undefined {
-    let found: FileText | undefined;
+  find(from: Entry, path: string, purpose: 'read' | 'import' = 'read'): { file: string; text: string } | undefined {
+    const file = path.startsWith(TEMPLATE) || isAbsolute(path) ? path : join(dirname(from.file), path);
     try {
-      found = this.files.read(path, from.file);
+      const text = path.startsWith(TEMPLATE) ? this.template(path) : this.text(file);
+      if (text !== undefined) return { file, text };
+      this.problems.error(from, `cannot ${purpose} "${path}": the file does not exist`);
     } catch (error) {
-      this.problems.error(from, (error as Error).message);
-      return undefined;
+      this.problems.error(from, `cannot ${purpose} "${path}": ${(error as Error).message}`);
     }
-    if (!found) this.problems.error(from, `cannot ${purpose} "${path}": the file does not exist`);
-    return found;
+    return undefined;
+  }
+
+  text(file: string): string | undefined {
+    try {
+      return this.fs?.readFileSync(file, 'utf8').toString();
+    } catch (error) {
+      if ((error as { code?: string }).code === 'ENOENT') return undefined;
+      throw error;
+    }
+  }
+
+  private template(path: string): string {
+    if (!this.templates) throw new Error('templates are not read here (no templates directory is given)');
+    const name = path.slice(TEMPLATE.length);
+    const text = basename(name) === name ? this.text(join(this.templates, `${name}.yml`)) : undefined;
+    if (text !== undefined) return text;
+    const names = this.fs!.readdirSync(this.templates)
+      .map(String)
+      .filter((file) => file.endsWith('.yml'))
+      .map((file) => TEMPLATE + file.slice(0, -'.yml'.length))
+      .sort();
+    throw new Error(`there is no such template (only ${names.join(', ')})`);
   }
 
   /** Reads the tree of a file that another file names. */
   read(from: Entry, path: string, chain: string[] = []): MapNode | undefined {
     const found = this.find(from, path);
     if (!found) return undefined;
-    const key = this.files.key(found.file);
+    const key = resolve(found.file);
     if (chain.includes(key)) {
       this.problems.error(from, `"${path}" extends itself, directly or through other files`);
       return undefined;
@@ -180,13 +205,12 @@ export class SourceLoader {
       this.problems.error(extended, 'a patch given its base by the application does not name one with $extends');
       return undefined;
     }
-    const target = this.tree(base.text, base.file, [...chain, this.files.key(base.file)]);
+    const target = this.tree(base.text, base.file, [...chain, resolve(base.file)]);
     if (!root || !target) return undefined;
     new Patch(root, target, this.problems).apply();
     return target;
   }
 
-  /** The tree of one file as written, with each `$base` of a merged file put back. */
   private parse(input: unknown, file: string): MapNode | undefined {
     const root = SourceReader.for(input, file, this.problems).read();
     if (root) new MergedForm(this.problems).restore(root);
