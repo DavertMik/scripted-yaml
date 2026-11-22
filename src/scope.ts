@@ -17,6 +17,8 @@ export type Target =
   /** `base` in a patch: the entry that was replaced. */
   | { kind: 'base'; entry: Entry }
   | { kind: 'function'; entry: Entry }
+  /** A function of `$functions` that the application passes. */
+  | { kind: 'hosted'; name: string }
   | { kind: 'import'; spec: ImportSpec }
   /** A key of the file. */
   | { kind: 'key'; entry: Entry };
@@ -98,7 +100,7 @@ export class Scope {
   /** The names a formula at this place could have meant, for "did you mean". */
   names(reader: Node): string[] {
     const keys = this.maps(reader).flatMap((map) => map.entries.filter((entry) => !entry.key.keyword).map((entry) => entry.name));
-    return ['vars', ...keys, ...this.source.functions.keys(), ...this.source.imported.keys()];
+    return ['vars', ...keys, ...this.source.functions.keys(), ...this.source.hosted.keys(), ...this.source.imported.keys()];
   }
 
   /** The name a `$each!` item gives each value: its `$as`, or `item`. */
@@ -109,6 +111,7 @@ export class Scope {
   private callable(name: string, builtins = true): Target | undefined {
     const defined = this.source.functions.get(name);
     if (defined) return { kind: 'function', entry: defined };
+    if (this.source.hosted.has(name)) return { kind: 'hosted', name };
     const spec = this.source.imported.get(name);
     if (spec) return { kind: 'import', spec };
     return builtins && Builtins.has(name) ? { kind: 'builtin' } : undefined;

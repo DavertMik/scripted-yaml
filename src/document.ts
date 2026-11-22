@@ -1,4 +1,5 @@
 import { evaluate } from 'feelin';
+import type { HostFunction } from './functions.js';
 import type { Imported } from './importers.js';
 import { MergedForm } from './merged.js';
 import { type Entry, ListNode, MapNode, type Node } from './node.js';
@@ -11,6 +12,13 @@ import type { Variable } from './variables.js';
 /** The application's function for one marker. It receives the value as written; what it returns becomes the value. */
 // biome-ignore lint/suspicious/noExplicitAny: the value is whatever YAML held under the key
 export type Marker = (source: any) => unknown;
+
+/** What `resolve` is given: the variables, and the functions the file declares for the application to pass. */
+export interface ResolveOptions {
+  vars?: Record<string, unknown>;
+  /** By name. Each must be synchronous: a formula cannot wait. */
+  functions?: Record<string, unknown>;
+}
 
 /** The result of one test of `$tests`. */
 export class TestResult {
@@ -98,13 +106,18 @@ export class Document {
     return [...this.source.variables.declared.values()];
   }
 
+  /** The functions the file declares under `$functions` for the application to pass. */
+  get functions(): HostFunction[] {
+    return [...this.source.hosted.values()];
+  }
+
   /**
    * All variables in, all values out: the whole file as plain data, every formula computed,
    * `$if` / `$unless` / `$each` / `$when` applied. Throws `ResolveFailed`.
    */
   // biome-ignore lint/suspicious/noExplicitAny: the shape is the file's own
-  resolve(options: { vars?: Record<string, unknown> } = {}): any {
-    return new Resolution(this.source, this.imports, options.vars ?? {}).run();
+  resolve(options: ResolveOptions = {}): any {
+    return new Resolution(this.source, this.imports, options.vars ?? {}, options.functions).run();
   }
 
   /**
@@ -120,14 +133,15 @@ export class Document {
   /**
    * Runs the file's `$tests`: each resolves the file with its `vars` and compares the keys under `expect`,
    * equal as FEEL's `=` says. A key is a path to a key of the file as problems name it
-   * (`stages.write-plan.when`), or a formula.
+   * (`stages.write-plan.when`), or a formula. The functions the file declares for the application
+   * to pass are given as `functions`, the same for every test.
    */
-  test(): TestResult[] {
+  test(options: { functions?: Record<string, unknown> } = {}): TestResult[] {
     return this.source.tests.map((test, index) => {
       const { about, vars, expect } = (test ?? {}) as { about?: string; vars?: Record<string, unknown>; expect?: Record<string, unknown> };
       const failures: string[] = [];
       try {
-        const resolution = new Resolution(this.source, this.imports, vars ?? {});
+        const resolution = new Resolution(this.source, this.imports, vars ?? {}, options.functions);
         resolution.run();
         for (const [path, expected] of Object.entries(expect ?? {})) {
           const actual = resolution.probe(path);
@@ -146,8 +160,8 @@ export class Document {
   }
 
   /** The file as a formula of another file reads it, when it is imported with `$import`. */
-  view(vars: Record<string, unknown>): unknown {
-    return new Resolution(this.source, this.imports, vars).view();
+  view(vars: Record<string, unknown>, functions: Record<string, unknown> = {}): unknown {
+    return new Resolution(this.source, this.imports, vars, functions).view();
   }
 
   private mark(entry: Entry, markers: Record<string, Marker | undefined>, problems: Problems): unknown {

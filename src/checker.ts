@@ -124,10 +124,14 @@ export class Checker {
       if (Builtins.has(name)) this.problems.error(entry, `the function "${name}" has the name of a FEEL built-in; give it another name`);
       if (this.source.imported.has(name)) this.problems.error(entry, `"${name}" is both defined in $functions and imported`);
     }
+    for (const [name, hosted] of this.source.hosted) {
+      if (Builtins.has(name)) this.problems.error(hosted.entry, `the function "${name}" has the name of a FEEL built-in; give it another name`);
+      if (this.source.imported.has(name)) this.problems.error(hosted.entry, `"${name}" is both declared in $functions and imported`);
+    }
     for (const [name, spec] of this.source.imported) {
       if (Builtins.has(name)) this.problems.error(spec.entry, `the imported name "${name}" is the name of a FEEL built-in; export it under another name`);
     }
-    const taken = (entry: Entry) => !entry.key.keyword && (this.source.functions.has(entry.name) || this.source.imported.has(entry.name));
+    const taken = (entry: Entry) => !entry.key.keyword && (this.source.functions.has(entry.name) || this.source.hosted.has(entry.name) || this.source.imported.has(entry.name));
     const visit = (node: Node): void => {
       if (node instanceof ListNode) node.items.forEach(visit);
       if (!(node instanceof MapNode)) return;

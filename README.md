@@ -588,11 +588,12 @@ result.theme.accent;                                      // "gold"
 | `validateText` / `loadText` | Same operations on YAML text or parsed data; `{ file }` sets the path context |
 | `loadTextSync` | `loadText` without a promise; a `.js` / `.ts` `$import` is a problem there |
 | `loadTextSync(patch, { base })` | Applies a patch to a base given as text or data |
-| `document.resolve({ vars })` | Resolved data; throws `ResolveFailed` on evaluation errors |
-| `document.test()` | Results of the file's `$tests` |
+| `document.resolve({ vars, functions })` | Resolved data; throws `ResolveFailed` on evaluation errors. `functions` passes the functions the file declares under `$functions` |
+| `document.test({ functions })` | Results of the file's `$tests` |
 | `document.merged()` | The file with `$extends` applied, as one file: keys as written, nothing computed |
 | `document.marked` | Each marked key; set its `value` after load, and `resolve` reads it |
 | `document.variables` | Declared inputs |
+| `document.functions` | Functions the file declares for the application to pass |
 
 Only `load` and `loadText` return a promise: they import modules. `load` throws
 `ValidationFailed` with `.problems` on validation errors. `new ScriptedYaml({ strict: true })`

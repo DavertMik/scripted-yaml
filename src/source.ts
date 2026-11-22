@@ -1,4 +1,5 @@
 import type { FileText, Files } from './files.js';
+import { HostFunction } from './functions.js';
 import { Importer, ImportFailed, ImportSpec } from './importers.js';
 import { MergedForm } from './merged.js';
 import { type Entry, MapNode, type Node, ScalarNode, Signature } from './node.js';
@@ -16,6 +17,8 @@ export class Source {
   readonly variables = new Variables();
   /** `$functions`, by name. */
   readonly functions = new Map<string, Entry>();
+  /** `$functions` without a formula: the application passes them, by name. */
+  readonly hosted = new Map<string, HostFunction>();
   readonly imports: ImportSpec[] = [];
   /** Every imported name, with the line of `$import` that brings it. */
   readonly imported = new Map<string, ImportSpec>();
@@ -51,13 +54,32 @@ export class Source {
     if (!(node instanceof MapNode)) return this.problems.error(node, '$functions must be a map: name(parameter)!: formula');
     for (const entry of node.entries) {
       const signature = new Signature(entry.name);
+      if (entry.key.kind === 'plain') {
+        this.host(signature, entry);
+        continue;
+      }
       if (entry.key.kind !== 'formula') {
         this.problems.error(entry, `a function is a formula: write "${signature.name}(…)!: …"`);
         continue;
       }
+      if (this.hosted.has(signature.name)) this.problems.error(entry, `the function "${signature.name}" is declared twice in $functions; keep one`);
       if (signature.parameters && entry.value instanceof ScalarNode) entry.formula = signature.define(entry.value.source);
       this.functions.set(signature.name, entry);
     }
+  }
+
+  /** A function the application passes: `name(parameters): { about: … }`, or with no value. */
+  private host(signature: Signature, entry: Entry): void {
+    const settings = entry.value.toData();
+    if (settings !== null && !(entry.value instanceof MapNode)) {
+      this.problems.error(entry, `"${entry.key.raw}" declares a function the application passes, with a map: { about: … }; for a formula, write "${entry.key.raw}!"`);
+      return;
+    }
+    if (this.functions.has(signature.name) || this.hosted.has(signature.name)) {
+      this.problems.error(entry, `the function "${signature.name}" is declared twice in $functions; keep one`);
+      return;
+    }
+    this.hosted.set(signature.name, new HostFunction(signature.name, signature.parameters, entry, (settings ?? {}) as Record<string, unknown>));
   }
 
   private readImports(node: Node | undefined): void {

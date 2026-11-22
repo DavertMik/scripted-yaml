@@ -43,10 +43,12 @@ types and names. So nothing a file computes may depend on its DSL:
 - a variable the file reads but does not declare is a warning, not an error, and is null unless the application passes it. A DSL can make such names known (`STAGE_DIR`, or any upper-case name), which removes the warning and nothing else.
 
 This holds for functions too. A formula can call only FEEL's built-ins, a
-function defined in the file under `$functions`, or a function the file
-imports. `fileExists(...)` in a pipeline works because that pipeline has
-`$import: { ./pipeline-host.ts: [fileExists] }`. The application cannot slip a
-function in from code.
+function the file defines or declares under `$functions`, or a function the
+file imports. `fileExists(...)` in a pipeline works because that pipeline has
+`$import: { ./pipeline-host.ts: [fileExists] }`, or because it declares
+`fileExists(path): {}` under `$functions` and the application passes it. The
+application cannot slip in a function the file does not name: every name a
+formula calls is written in the file, so `validate` on text alone knows it.
 
 ## 3. Syntax
 
@@ -219,8 +221,8 @@ $vars:
 
 ### 3.7 Functions and `$import`
 
-Besides FEEL's built-ins, a formula may call a function the file defines or
-one it imports. There is no third source.
+Besides FEEL's built-ins, a formula may call a function the file defines,
+one it declares for the application to pass, or one it imports.
 
 **`$functions`** defines helpers in the file. The key is the name with its
 parameters in brackets; the value is the formula. The library splits the key
@@ -235,6 +237,25 @@ $functions:
 
 A parameter must not have the name of a field of the items it filters:
 inside `[ ]` the item's own field wins (`docs/examples/5-traps.yml`).
+
+**A function the application passes** is a key of `$functions` without the
+`!`, as a variable is a key of `$vars`. Its value is a map with `about`, or
+nothing. The application passes the function to `resolve` by name (7.4).
+
+```yaml
+$functions:
+  fileCount(mask):
+    about: How many files match the mask.
+  crowded(mask)!: fileCount(mask) > 2
+
+specs!: fileCount("*.spec.ts")
+```
+
+Such a function has the same rules as an imported one: it is not the name of
+a FEEL built-in, of another function or of a key, and it is synchronous. A
+declared function the application does not pass, or passes as something
+other than a synchronous function, fails `resolve` before anything is
+computed. `validate` checks only that the name is declared.
 
 **`$import`** takes names from another file. The path is relative to the
 file, and the importer is chosen by the file's extension.
@@ -387,7 +408,7 @@ See `examples/pipelines/pipeline.dsl.yml`.
 A DSL is for checking only (section 2). It may say that `STAGE_DIR` exists,
 but the value comes from the application, and a default belongs in the
 file's own `$vars`. It does not list markers or functions: markers are
-registered by the application, and functions are imported by each file.
+registered by the application, and functions are declared or imported by each file.
 
 **Types.** TypeScript types are generated from a `$schema`, so the data an
 application gets from `load` and `resolve` is typed. How they are generated
@@ -498,12 +519,13 @@ and lists replace.
 ## 7. The TypeScript API
 
 The package exports `ScriptedYaml`, `Document`, `Problem`, `ValidationFailed`,
-`ResolveFailed`, `Formula`, `Text`, `TestResult` and `Variable`.
+`ResolveFailed`, `Formula`, `Text`, `TestResult`, `Variable` and `HostFunction`.
 
 ### 7.1 Creating the library object
 
 The application registers its markers. That is the only thing it registers:
-functions come from each file's `$import`.
+functions come from each file's `$import`, or are passed to `resolve` when the
+file declares them under `$functions`.
 
 ```ts
 import { ScriptedYaml } from 'scripted-yaml';
@@ -671,6 +693,7 @@ result.stages[0].task;        // the text, with every {{ }} filled in
 ```
 
 - **All variables.** `vars` is checked against the file's `$vars` first. A required variable that is missing is an error that lists all the missing ones, before anything is computed.
+- **All declared functions.** `functions` holds, by name, each function the file declares under `$functions` without a formula: `document.resolve({ vars, functions: { fileCount } })`. One that is missing, not a function, or async is an error before anything is computed. `document.functions` lists them, with their parameters and `about`. `document.test({ functions })` passes them to every test, and an imported scripted-yaml file gets them too.
 - **All values.** Every `key!` holds its value, every `{{ }}` is filled in, and `$if` / `$unless` / `$each` / `$when` are applied. The result contains no formulas.
 - **One pass, by reference.** Formulas are computed in the order they refer to each other (3.5), each once.
 - **Marked keys are unchanged unless a formula read them.** What a marker function returned at load is in the result as it is: a `ShellCommand` stays a `ShellCommand`. One that a formula read holds the value that was read (see below).
@@ -1009,7 +1032,7 @@ on Node 22.21 and on Bun).
 
 **Decided** (2026-11-20).
 
-1. A function a formula calls comes only from FEEL, `$functions` or `$import`. The application passes none.
+1. A function a formula calls comes only from FEEL, `$functions` or `$import`. The application passes only the functions a file declares under `$functions` (changed 2026-11-22; until then it passed none).
 2. `$import` has built-in importers for `.ts`, `.js`, `.yml` / `.yaml` and `.md`, chosen by extension. Any other extension is an error.
 3. Imported functions are synchronous, and the library enforces it.
    Validation of a formula is its syntax and whether its names are defined. Nothing else, and nothing is evaluated.
