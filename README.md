@@ -11,23 +11,20 @@ Let an agent write 99% of your application. Keep the important 1% under your dir
 
 - **Some code is too important to leave buried in generated implementation.** Pricing rules,
   RPG formulas, UI structure, and business processes determine what your application does.
-  You need to read, understand, and change them yourself.
-- **You control YAML specs; agents build around them.** Edit menu order and RPG formulas directly,
-  without digging through React components or game-engine code. YAML specs are executable application
-  definitions, not documentation to reimplement; tell agents to leave the specs alone and handle rendering and integrations.
-- **Self-contained YAML, with scripting sugar.** Keep inputs, data, FEEL formulas, conditions,
-  and multiline text together for easy editing; application handlers execute scripts.
-  External file dependencies are explicit through `$dsl`, `$import`, or `$extends`.
+  You need to read, understand, and change them when needed.
+- **You control YAML specs; agents execute them.** YAML specs are executable application
+  definitions, not outdated specs or documentation to reimplement.
+- **Self-contained YAML, with scripting sugar.** Keep inputs, data, formulas, conditions,
+  together for easy editing.
 - **Declare state machines, UIs, and business processes in YAML.** Describe states, transitions,
   screens, and workflow steps as data and rules; application code interprets the definitions.
-- **Each YAML spec can choose its own DSL.** `$dsl: ./ui.dsl.yml` points to a separate file defining
-  the spec's validation structure. UI, business logic, validation rules, and access control can use
-  different DSLs in one project, all through the same `ScriptedYaml` API.
+- **Each YAML spec can choose its own DSL.** UI, business logic, validation rules, and access control can use
+  different Domain Specific Languages in one project.
 - **Structure checking—like TypeScript for YAML.** A defined DSL checks required fields,
-  nested shapes, and allowed values. It validates the YAML, not how the application executes it.
+  nested shapes, and allowed values.
 - **Use the included [agent skill](skills/scripted-yaml-convert/SKILL.md) to migrate existing logic.**
-  Ask your agent to extract business rules from application code into YAML specs, preserve
-  the existing behavior, and validate the specs before handing them over for manual control.
+  Ask your agent to extract business rules from application code into YAML specs, preserving
+  the existing behavior.
 
 ## Application code and business rules
 
@@ -36,10 +33,17 @@ Let an agent write 99% of your application. Keep the important 1% under your dir
        alt="A big circle of application code (React components, file operations, API requests, styling) and a small circle of business rules that defines it">
 </p>
 
-**Application code** (React components, file operations, API requests, styling) is big; let an agent write it.
-**Business rules** (which plan sees which menu item, discounts, seat limits) are small; you need to know them exactly.
+**Application code** is fully written by agent, takes some decisions implicilty, without asking you, writing them into code.
+**Business rules** expose implemented decisions for better underestanding and for further change.
 
-Put the rules in YAML. The app reads them at runtime, like feature flags: switch a rule, the app follows. No agent, no rebuild.
+### Why YAML?
+
+We selected YAML because it is readable and compact (no curly braces, no types). We added small things on top:
+
+- Expression language - to set variables dynamically in flexible way
+- Vars as `$vars` key - to declare set of required variables
+- Schema `$schema` (inline) or usef in multiple files via `$dsl`
+- Functions obtained from application or declared internally
 
 ### Example: a nav bar by plan
 
