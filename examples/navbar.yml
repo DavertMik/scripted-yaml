@@ -1,0 +1,16 @@
+# A nav bar by plan: which items each plan sees. The application passes the plan.
+$vars:
+  plan: { default: free }
+
+navbar:
+  - label: Dashboard
+    path: /
+  - label: Reports
+    path: /reports
+    $if!: vars.plan in ["pro", "team"]
+  - label: Team
+    path: /team
+    $if!: vars.plan = "team"
+  - label: Upgrade
+    path: /pricing
+    $if!: vars.plan = "free"

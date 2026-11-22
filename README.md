@@ -4,12 +4,10 @@
 
 Let an agent write 99% of your application. Keep the important 1% under your direct control.
 
-```mermaid
-flowchart TD
-  developer["Developer"] --> spec["YAML Spec"]
-  spec --> code["Application Code"]
-  agent["Agent"] --> code
-```
+<p align="center">
+  <img src="docs/images/spec-and-agent.png" width="880"
+       alt="The agent writes the application code once; the code reads the YAML spec live at runtime; the developer switches rules in the spec and the app follows, with no rebuild">
+</p>
 
 - **Some code is too important to leave buried in generated implementation.** Pricing rules,
   RPG formulas, UI structure, and business processes determine what your application does.
@@ -30,6 +28,89 @@ flowchart TD
 - **Use the included [agent skill](skills/scripted-yaml-convert/SKILL.md) to migrate existing logic.**
   Ask your agent to extract business rules from application code into YAML specs, preserve
   the existing behavior, and validate the specs before handing them over for manual control.
+
+## Application code and business rules
+
+<p align="center">
+  <img src="docs/images/rules-define-code.png" width="880"
+       alt="A big circle of application code (React components, file operations, API requests, styling) and a small circle of business rules that defines it">
+</p>
+
+**Application code** (React components, file operations, API requests, styling) is big; let an agent write it.
+**Business rules** (which plan sees which menu item, discounts, seat limits) are small; you need to know them exactly.
+
+Put the rules in YAML. The app reads them at runtime, like feature flags: switch a rule, the app follows. No agent, no rebuild.
+
+### Example: a nav bar by plan
+
+**1. Rules buried in JSX.** Which plans see Reports? You'd have to ask an agent and trust its guess.
+
+```jsx
+export function NavBar({ plan }) {
+  return (
+    <nav>
+      <Link to="/">Dashboard</Link>
+      {plan !== 'free' && <Link to="/reports">Reports</Link>}
+      {plan === 'team' && <Link to="/team">Team</Link>}
+      {plan === 'free' && <Link to="/pricing">Upgrade</Link>}
+    </nav>
+  );
+}
+```
+
+`plan !== 'free'` quietly gives Reports to any new plan, and the same checks spread to sidebars and route guards.
+
+**2. Move the rules to YAML.** One file you own; `$if!` drops an item when false.
+
+```yaml
+# navbar.yml
+$vars:
+  plan: { default: free }
+
+navbar:
+  - label: Dashboard
+    path: /
+  - label: Reports
+    path: /reports
+    $if!: vars.plan in ["pro", "team"]
+  - label: Team
+    path: /team
+    $if!: vars.plan = "team"
+  - label: Upgrade
+    path: /pricing
+    $if!: vars.plan = "free"
+```
+
+**3. React only renders.** No plan checks left; the agent can keep working on this part.
+
+```jsx
+import { ScriptedYaml } from 'scripted-yaml/core';
+import navbarYaml from './navbar.yml?raw'; // Vite text import
+
+const navbar = new ScriptedYaml().loadTextSync(navbarYaml, { file: 'navbar.yml' });
+
+export function NavBar({ plan }) {
+  const { navbar: items } = navbar.resolve({ vars: { plan } });
+  return (
+    <nav>
+      {items.map((item) => (
+        <Link key={item.path} to={item.path}>{item.label}</Link>
+      ))}
+    </nav>
+  );
+}
+```
+
+For `pro` this renders Dashboard and Reports.
+
+**4. Change a rule in one line.** Give Team to `pro`, no component change:
+
+```diff
+   - label: Team
+     path: /team
+-    $if!: vars.plan = "team"
++    $if!: vars.plan in ["pro", "team"]
+```
 
 ## Small examples
 

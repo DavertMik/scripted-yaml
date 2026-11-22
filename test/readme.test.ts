@@ -40,13 +40,21 @@ class ReadmeExample {
 }
 
 describe('the README examples', () => {
-  for (const name of ['discounts.yml', 'ui.yml', 'rpg.yml', 'order-states.yml', 'menu.yml', 'signup.yml']) {
+  for (const name of ['discounts.yml', 'ui.yml', 'rpg.yml', 'order-states.yml', 'menu.yml', 'signup.yml', 'navbar.yml']) {
     test(`${name} is shown word for word and has no problems`, async () => {
       const example = new ReadmeExample(name);
       expect(readme).toContain(example.shown);
       expect(await example.validate()).toEqual([]);
     });
   }
+
+  test('navbar: the items each plan sees', async () => {
+    const navbar = new ReadmeExample('navbar.yml');
+    const labels = async (plan: string) => ((await navbar.resolve({ plan })).navbar as { label: string }[]).map((i) => i.label);
+    expect(await labels('free')).toEqual(['Dashboard', 'Upgrade']);
+    expect(await labels('pro')).toEqual(['Dashboard', 'Reports']);
+    expect(await labels('team')).toEqual(['Dashboard', 'Reports', 'Team']);
+  });
 
   test('shop: a vip customer with a cart of 240', async () => {
     const shop = new ReadmeExample('discounts.yml');
