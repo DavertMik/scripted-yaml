@@ -42,7 +42,7 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "build": "rm -rf dist && bun build src/index.ts src/core.ts src/cli.ts --outdir dist --target node --packages external --splitting && tsc -p tsconfig.build.json",
-    "prepublishOnly": "bun run typecheck && bun test && bun run build"
+    "prepublishOnly": "bun run build && bun run typecheck && bun test"
   },
   "dependencies": {
     "feelers": "^3.2.0",
