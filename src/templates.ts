@@ -5,7 +5,7 @@ import { basename, join } from 'node:path';
 export class Templates {
   static readonly prefix = 'scripted-yaml/';
 
-  constructor(private readonly source = join(import.meta.dirname, '../templates')) {}
+  constructor(readonly source = join(import.meta.dirname, '../templates')) {}
 
   get names(): string[] {
     return readdirSync(this.source)

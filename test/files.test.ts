@@ -1,7 +1,8 @@
 // $extends, $schema, $dsl, $tests, and the files in examples/ loaded whole.
 import { describe, expect, test } from 'bun:test';
+import { Volume } from 'memfs';
 import { join } from 'node:path';
-import { DiskFiles, type Problem, ResolveFailed, ScriptedYaml, ValidationFailed } from '../src/index';
+import { type Problem, ResolveFailed, ScriptedYaml, ValidationFailed } from '../src/index';
 
 const fixtures = join(import.meta.dir, 'fixtures');
 const examples = join(import.meta.dir, '..', 'examples');
@@ -408,18 +409,10 @@ describe('the files in examples/', () => {
   });
 });
 
-describe('DiskFiles', () => {
-  test('a subclass answers some names itself and leaves the rest to the disk', () => {
-    class Bundled extends DiskFiles {
-      read(path: string, from: string | undefined) {
-        if (path === 'bundled:base') return { file: 'bundled:base', text: 'title: Bundled\nsize: 1\n' };
-        return super.read(path, from);
-      }
-    }
-    const scripted = new ScriptedYaml({ files: new Bundled() });
-    expect(scripted.loadTextSync('$extends: bundled:base\n$replace:\n  size: 2\n', { file: 'mine.yml' }).resolve()).toEqual({ title: 'Bundled', size: 2 });
-    const fromDisk = scripted.validateText('$extends: ./fixtures/base.yml\n', { file: join(import.meta.dir, 'x.yml') });
-    expect(fromDisk.filter((problem) => problem.message.includes('cannot read'))).toEqual([]);
-    expect(scripted.validateText('$extends: ./nope.yml\n', { file: 'x.yml' })[0]!.message).toBe('cannot read "./nope.yml": the file does not exist');
+describe('another fs', () => {
+  test('an fs given to ScriptedYaml is read instead of the disk', () => {
+    const scripted = new ScriptedYaml({ fs: Volume.fromJSON({ '/base.yml': 'title: Memory\nsize: 1\n' }) });
+    expect(scripted.loadTextSync('$extends: base.yml\n$replace:\n  size: 2\n', { file: '/mine.yml' }).resolve()).toEqual({ title: 'Memory', size: 2 });
+    expect(scripted.validateText('$extends: ./fixtures/base.yml\n', { file: join(import.meta.dir, 'x.yml') })[0]!.message).toBe('cannot read "./fixtures/base.yml": the file does not exist');
   });
 });

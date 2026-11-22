@@ -17,6 +17,7 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "browser": "./dist/core.js",
       "import": "./dist/index.js"
     },
     "./core": {
@@ -47,11 +48,15 @@
   "dependencies": {
     "feelers": "^3.2.0",
     "feelin": "^8.2.2",
+    "gensync": "^1.0.0-beta.2",
     "mdq-cli": "^0.1.4",
+    "pathe": "^2.0.3",
     "yaml": "^2.8.0"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/gensync": "^1.0.5",
+    "memfs": "^4.80.1",
     "typescript": "^5.6.0"
   },
   "keywords": [

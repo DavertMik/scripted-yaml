@@ -1,50 +1,76 @@
-/** A file another file names, as the application gives it. */
+import { basename, dirname, isAbsolute, join, resolve } from 'pathe';
+
+/**
+ * What the library reads files with: `node:fs`, or an `fs` of `memfs` where there is no disk.
+ * Only these methods are used.
+ */
+export interface FileSystem {
+  readFileSync(path: string, encoding: 'utf8'): { toString(): string };
+  readdirSync(path: string): unknown[];
+}
+
+/** A file another file names, as it was read. */
 export interface FileText {
-  /** The name the file goes by: in problems, and in the paths it names in turn. Two files with one name are one file. */
+  /** The name the file goes by: in problems, and in the paths it names in turn. */
   readonly file: string;
   readonly text: string;
 }
 
+/** The prefix of a path that names a template of the package, `scripted-yaml/<name>`. */
+export const TEMPLATE_PREFIX = 'scripted-yaml/';
+
 /**
- * Where the files that `$extends`, `$dsl` and `$import` name come from. The library never looks
- * at a disk itself: the core reads only through this class, so it runs in a browser or a Worker.
- * `DiskFiles` (from `scripted-yaml`, not `scripted-yaml/core`) reads the disk.
+ * Finds the files that `$extends`, `$dsl` and `$import` name: a path is beside the file that names it,
+ * and `scripted-yaml/<name>` is `<name>.yml` in the templates directory.
  */
-export abstract class Files {
-  /**
-   * The text of a file. `path` is written as it is in the file; `from` is the name of that file, or
-   * undefined for the first file. Undefined: there is no such file. Throw an Error to refuse a name
-   * with a message of your own; it is reported on the line that names it.
-   */
-  abstract read(path: string, from: string | undefined): FileText | undefined;
+export class FileReader {
+  constructor(
+    private readonly fs: FileSystem | undefined,
+    private readonly templates: string | undefined,
+  ) {}
 
-  /** Whether two names are one file, for finding a file that extends or imports itself. */
+  /** The text of a file. Undefined: there is no such file. Throws an Error whose message is the problem. */
+  read(path: string, from: string | undefined): FileText | undefined {
+    if (FileReader.isTemplate(path)) return this.template(path);
+    const file = from === undefined || isAbsolute(path) ? path : join(dirname(from), path);
+    const text = this.text(file, from === undefined ? 'cannot read the file' : `cannot read "${path}"`);
+    return text === undefined ? undefined : { file, text };
+  }
+
+  /** The one name of a file, for finding a file that extends or imports itself. */
   key(file: string): string {
-    return file;
+    return FileReader.isTemplate(file) && this.templates ? this.templateFile(file) : resolve(file);
   }
 
-  /** The exports of a `.js` or `.ts` module named by `$import`. Only `load` and `loadText` ask for one. */
-  async module(file: string): Promise<Record<string, unknown>> {
-    throw new Error(`"${file}" is a module, and modules are not imported here`);
-  }
-}
-
-/** Files held in memory, by name. A file names another by its name exactly. */
-export class MemoryFiles extends Files {
-  private readonly files: Map<string, string>;
-
-  constructor(files: Record<string, string> = {}) {
-    super();
-    this.files = new Map(Object.entries(files));
+  static isTemplate(path: string): boolean {
+    return path.startsWith(TEMPLATE_PREFIX);
   }
 
-  read(path: string): FileText | undefined {
-    const text = this.files.get(path);
-    return text === undefined ? undefined : { file: path, text };
+  private template(path: string): FileText {
+    const refused = `cannot read "${path}"`;
+    if (!this.templates) throw new Error(`${refused}: templates are not read here (no templates directory is given)`);
+    const name = path.slice(TEMPLATE_PREFIX.length);
+    const text = basename(name) === name ? this.text(this.templateFile(path), refused) : undefined;
+    if (text !== undefined) return { file: path, text };
+    const names = this.fs!.readdirSync(this.templates)
+      .map(String)
+      .filter((name) => name.endsWith('.yml'))
+      .map((name) => TEMPLATE_PREFIX + name.slice(0, -'.yml'.length))
+      .sort();
+    throw new Error(`${refused}: there is no such template (only ${names.join(', ')})`);
   }
 
-  set(name: string, text: string): this {
-    this.files.set(name, text);
-    return this;
+  private templateFile(path: string): string {
+    return resolve(this.templates!, `${path.slice(TEMPLATE_PREFIX.length)}.yml`);
+  }
+
+  private text(file: string, refused: string): string | undefined {
+    if (!this.fs) return undefined;
+    try {
+      return this.fs.readFileSync(file, 'utf8').toString();
+    } catch (error) {
+      if ((error as { code?: string }).code === 'ENOENT') return undefined;
+      throw new Error(`${refused}: ${(error as Error).message}`, { cause: error });
+    }
   }
 }

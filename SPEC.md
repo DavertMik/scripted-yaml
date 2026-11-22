@@ -605,31 +605,32 @@ name alone. Function names need nothing: they are in the file's `$import`.
 const checker = new ScriptedYaml({ markers: ['sh'] });
 ```
 
-**Where there is no disk.** The library reads every file through a `Files`
-object. `scripted-yaml` reads the disk with `DiskFiles`. `scripted-yaml/core`
-is the same library without Node: it imports no `node:` module, so it bundles
-for a browser or a Cloudflare Worker, and it reads only the files it is given.
+**Where there is no disk.** The library reads every file with an `fs`: an
+object with `readFileSync(path, 'utf8')` and `readdirSync(path)`, as `node:fs`
+has. A path is beside the file that names it; `scripted-yaml/<name>` is
+`<name>.yml` in the `templates` directory. On Node, `scripted-yaml` reads the
+disk with `node:fs` and its own templates. Its browser build (the `browser`
+export condition, or `scripted-yaml/core`) imports no `node:` module, so it
+bundles for a browser or a Cloudflare Worker, and reads only the `fs` it is
+given, such as the `fs` of [memfs](https://github.com/streamich/memfs):
 
 ```ts
-import { Files, MemoryFiles, ScriptedYaml } from 'scripted-yaml/core';
+import { Volume } from 'memfs';
+import { ScriptedYaml } from 'scripted-yaml';
 
-const scripted = new ScriptedYaml({ files: new MemoryFiles({ 'base.yml': text }) });
-
-class Pipelines extends Files {
-  // `path` as written, `from` the name of the file that writes it (undefined for the first file).
-  read(path: string, from: string | undefined) {
-    if (path in this.saved && from !== `saved:${path}`) return { file: `saved:${path}`, text: this.saved[path] };
-    if (path in bundled) return { file: `bundled:${path}`, text: bundled[path] };
-    throw new Error(`no pipeline "${path}" to extend`);   // reported on the line that names it
-  }
-}
+const fs = Volume.fromJSON({
+  '/user/regression.yml': saved,
+  '/bundled/regression.yml': bundled,
+});
+const scripted = new ScriptedYaml({ fs, templates: '/templates' });
 ```
 
-`read` gives the file's text and the name it goes by. That name is in the
-problems, it is the `from` of the paths it names in turn, and two files with
-one name are one file when the library looks for a file that extends itself.
-Undefined means there is no such file. A `.js` or `.ts` module of `$import`
-comes from `files.module()`, which only `DiskFiles` has.
+The path a file is read under is its name in the problems, and two paths to
+one file are one file when the library looks for a file that extends itself.
+A file the `fs` has not got is reported as not existing; any other error of
+the `fs` is reported with its message, on the line that names the file. A
+`.js` or `.ts` module of `$import` comes from the `importModule(file)` option,
+which `scripted-yaml` on Node sets to a dynamic `import`.
 
 **What `validate` cannot check.** It runs no marker function, so it sees
 nothing behind a marker: a shell command with a mistake, an mdq selector

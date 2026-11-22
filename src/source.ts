@@ -1,4 +1,4 @@
-import type { FileText, Files } from './files.js';
+import type { FileReader, FileText } from './files.js';
 import { HostFunction } from './functions.js';
 import { Importer, ImportFailed, ImportSpec } from './importers.js';
 import { MergedForm } from './merged.js';
@@ -117,11 +117,11 @@ export class Source {
   }
 }
 
-/** Reads a file and the files it names with `$extends` and `$dsl`, through the application's `Files`. */
+/** Reads a file and the files it names with `$extends` and `$dsl`, through the application's file system. */
 export class SourceLoader {
   constructor(
     private readonly problems: Problems,
-    private readonly files: Files,
+    private readonly files: FileReader,
   ) {}
 
   /**

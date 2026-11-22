@@ -1,6 +1,7 @@
+import gensync, { type Handler } from 'gensync';
 import { Checker } from './checker.js';
 import { Document, type Marker } from './document.js';
-import { type FileText, type Files, MemoryFiles } from './files.js';
+import { FileReader, type FileSystem, type FileText } from './files.js';
 import { type Imported, Importer, ImportFailed, type ImportHost, type ImportSpec } from './importers.js';
 import { type Problem, Problems, ValidationFailed } from './problem.js';
 import { type Source, SourceLoader } from './source.js';
@@ -12,11 +13,15 @@ export interface ScriptedYamlOptions {
    */
   markers?: Record<string, Marker> | string[];
   /**
-   * Where the files that `$extends`, `$dsl` and `$import` name come from, and the file `validate` and
-   * `load` open. `scripted-yaml` reads the disk (`DiskFiles`); `scripted-yaml/core` reads nothing
-   * unless it is given files, such as `MemoryFiles`.
+   * What the files that `validate`, `load`, `$extends`, `$dsl` and `$import` name are read with.
+   * `scripted-yaml` reads the disk with `node:fs`; in a browser or a Worker, give the `fs` of `memfs`.
+   * Without one, no file is read.
    */
-  files?: Files;
+  fs?: FileSystem;
+  /** The directory of the templates that `scripted-yaml/<name>` names. `scripted-yaml` gives its own. */
+  templates?: string;
+  /** The exports of a `.js` or `.ts` file that `$import` names. `scripted-yaml` imports it from the disk. */
+  importModule?: (file: string) => Promise<Record<string, unknown>>;
   /** Every warning is an error: a file with a warning does not load. */
   strict?: boolean;
 }
@@ -31,25 +36,33 @@ export interface FileOptions {
   base?: unknown;
 }
 
-/** A file opened by `open`: the document, and the check to run once every module it imports has loaded. */
-interface Opened {
-  readonly document: Document;
-  settle(): void;
-}
-
 /**
  * Validates and loads scripted-yaml files. It computes nothing: see `Document.resolve`.
  * Everything is synchronous except `load` and `loadText`, which import `.js` and `.ts` modules.
  */
 export class ScriptedYaml {
   private readonly markers: Record<string, Marker | undefined> = {};
-  private readonly files: Files;
+  private readonly files: FileReader;
+  private readonly importModule: ScriptedYamlOptions['importModule'];
   private readonly strict: boolean;
+  /** `open` from the start, as `sync` and `async`: one way of loading, with or without a promise. */
+  private readonly opening = gensync((input: unknown, options: FileOptions) => this.open(input, options, []));
+  /** A module's exports: the async way waits for them; the sync way cannot. */
+  private readonly module = gensync({
+    sync: (spec: ImportSpec): Record<string, unknown> => {
+      throw new ImportFailed(`"${spec.path}" is a module, and importing one takes a promise: use load or loadText`);
+    },
+    async: (spec: ImportSpec): Promise<Record<string, unknown>> => {
+      if (!this.importModule) throw new ImportFailed(`"${spec.path}" is a module, and modules are not imported here (no importModule is given)`);
+      return this.importModule(spec.file);
+    },
+  });
 
   constructor(options: ScriptedYamlOptions = {}) {
     if (Array.isArray(options.markers)) for (const name of options.markers) this.markers[name] = undefined;
     else Object.assign(this.markers, options.markers);
-    this.files = options.files ?? new MemoryFiles();
+    this.files = new FileReader(options.fs, options.templates);
+    this.importModule = options.importModule;
     this.strict = options.strict ?? false;
   }
 
@@ -77,11 +90,7 @@ export class ScriptedYaml {
 
   /** The same for text that is not in a file (or data already parsed). */
   async loadText(input: unknown, options: FileOptions = {}): Promise<Document> {
-    const loading: Promise<void>[] = [];
-    const opened = this.open(input, options, [], loading);
-    await Promise.all(loading);
-    opened.settle();
-    return opened.document;
+    return this.opening.async(input, options);
   }
 
   /**
@@ -89,7 +98,7 @@ export class ScriptedYaml {
    * one: a file that imports a module is a problem here.
    */
   loadTextSync(input: unknown, options: FileOptions = {}): Document {
-    return this.open(input, options, [], undefined).document;
+    return this.opening.sync(input, options);
   }
 
   private check(input: unknown, options: FileOptions): { source: Source | undefined; problems: Problems } {
@@ -116,62 +125,35 @@ export class ScriptedYaml {
 
   /**
    * Validates a file and loads what it imports. `chain` holds the files being loaded on the way here,
-   * to stop an import that comes back to itself. With `loading`, each module import adds its promise
-   * there, and `settle` reports what failed once they are done; without it, a module is a problem.
+   * to stop an import that comes back to itself.
    */
-  private open(input: unknown, options: FileOptions, chain: string[], loading: Promise<void>[] | undefined): Opened {
+  private *open(input: unknown, options: FileOptions, chain: string[]): Handler<Document> {
     const file = options.file ?? '(text)';
     const { source, problems } = this.check(input, options);
     if (!source || problems.failed) throw new ValidationFailed(problems.list);
 
     const key = this.files.key(file);
-    const children: { spec: ImportSpec; settle: () => void }[] = [];
     const host: ImportHost = {
       document: (spec) => {
         const target = this.files.key(spec.file);
         if (target === key || chain.includes(target)) throw new ImportFailed('the import comes back to this file: an import cycle');
-        const opened = this.open(spec.text, { file: spec.file }, [...chain, key], loading);
-        children.push({ spec, settle: opened.settle });
-        return opened.document;
+        return this.open(spec.text, { file: spec.file }, [...chain, key]);
       },
-      module: (spec) => this.files.module(spec.file),
-    };
-    const failed = (spec: ImportSpec, error: unknown): void => {
-      if (error instanceof ImportFailed) problems.error(spec.entry, error.message);
-      else if (error instanceof ValidationFailed) problems.error(spec.entry, `cannot import "${spec.path}": ${error.message}`);
-      else throw error;
+      module: (spec) => this.module(spec),
     };
     const imports = new Map<string, Imported>();
-    const add = (list: Imported[]) => {
-      for (const imported of list) imports.set(imported.name, imported);
-    };
     for (const spec of source.imports) {
-      const importer = Importer.for(spec.path)!;
-      if (importer.waits && !loading) {
-        problems.error(spec.entry, `"${spec.path}" is a module, and importing one takes a promise: use load or loadText`);
-        continue;
-      }
       try {
-        const result = importer.load(spec, host);
-        if (result instanceof Promise) loading!.push(result.then(add, (error) => failed(spec, error)));
-        else add(result);
+        for (const imported of yield* Importer.for(spec.path)!.load(spec, host)) imports.set(imported.name, imported);
       } catch (error) {
-        failed(spec, error);
+        if (error instanceof ImportFailed) problems.error(spec.entry, error.message);
+        else if (error instanceof ValidationFailed) problems.error(spec.entry, `cannot import "${spec.path}": ${error.message}`);
+        else throw error;
       }
     }
     const document = new Document(file, source, imports, this.markers, problems);
-    const settle = (): void => {
-      for (const child of children) {
-        try {
-          child.settle();
-        } catch (error) {
-          failed(child.spec, error);
-        }
-      }
-      problems.sort();
-      if (problems.failed) throw new ValidationFailed(problems.list);
-    };
-    if (!loading) settle();
-    return { document, settle };
+    problems.sort();
+    if (problems.failed) throw new ValidationFailed(problems.list);
+    return document;
   }
 }

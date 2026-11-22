@@ -599,19 +599,21 @@ Only `load` and `loadText` return a promise: they import modules. `load` throws
 `ValidationFailed` with `.problems` on validation errors. `new ScriptedYaml({ strict: true })`
 makes every warning an error.
 
-**Without Node.** `scripted-yaml/core` is the same library with no `node:` import, for a
-browser or a Worker. It reads the files that `$extends`, `$dsl` and `$import` name from the
-`files` it is given:
+**Without Node.** In a browser or a Worker, bundlers pick the build of `scripted-yaml` with
+no `node:` import (the `browser` export condition; `scripted-yaml/core` names it directly).
+It reads files with the `fs` it is given, such as [memfs](https://github.com/streamich/memfs):
 
 ```ts
-import { MemoryFiles, ScriptedYaml } from 'scripted-yaml/core';
+import { Volume } from 'memfs';
+import { ScriptedYaml } from 'scripted-yaml';
 
-const scripted = new ScriptedYaml({ files: new MemoryFiles({ 'base.yml': baseText }) });
-const document = scripted.loadTextSync('$extends: base.yml\n…', { file: 'mine.yml' });
+const fs = Volume.fromJSON({ '/flows/base.yml': baseText });
+const scripted = new ScriptedYaml({ fs });
+const document = scripted.loadTextSync('$extends: base.yml\n…', { file: '/flows/mine.yml' });
 ```
 
-A class that extends `Files` reads from anywhere: its `read(path, from)` returns
-`{ file, text }`, undefined for no such file, or throws with its own message.
+Options there: `fs` (anything with `readFileSync` and `readdirSync`), `templates` (the
+directory `scripted-yaml/<name>` reads from), and `importModule(file)` for `.js` / `.ts` imports.
 
 ## The command line
 

@@ -1,7 +1,8 @@
 // `$functions`: the short form (parameters in the key) and the long form (a whole FEEL function).
 import { describe, expect, test } from 'bun:test';
 import { stringify } from 'yaml';
-import { MemoryFiles, ScriptedYaml } from '../src/index';
+import { Volume } from 'memfs';
+import { ScriptedYaml } from '../src/index';
 
 const scripted = new ScriptedYaml();
 const resolve = async (text: string) => (await scripted.loadText(text, { file: 'x.yml' })).resolve({ vars: {} });
@@ -122,15 +123,14 @@ crowded!: many("*.ts")
   });
 
   test('an imported scripted-yaml file gets them too', async () => {
-    const files = new MemoryFiles({ 'counts.yml': '$functions:\n  fileCount(mask):\nspecs!: fileCount("*.ts")\n' });
-    const document = new ScriptedYaml({ files }).loadTextSync('$import:\n  counts.yml: counts\nx!: counts.specs\n', { file: 'x.yml' });
+    const fs = Volume.fromJSON({ '/counts.yml': '$functions:\n  fileCount(mask):\nspecs!: fileCount("*.ts")\n' });
+    const document = new ScriptedYaml({ fs }).loadTextSync('$import:\n  counts.yml: counts\nx!: counts.specs\n', { file: '/x.yml' });
     expect(document.resolve({ functions: { fileCount } })).toEqual({ x: 5 });
   });
 
   test('a patch can turn a declared function into a formula, and the merged form keeps it', async () => {
-    const files = new MemoryFiles({ 'base.yml': text });
-    const local = new ScriptedYaml({ files });
-    const document = local.loadTextSync('$extends: base.yml\n$functions:\n  fileCount(mask)!: 3\n', { file: 'patch.yml' });
+    const local = new ScriptedYaml({ fs: Volume.fromJSON({ '/base.yml': text }) });
+    const document = local.loadTextSync('$extends: base.yml\n$functions:\n  fileCount(mask)!: 3\n', { file: '/patch.yml' });
     expect(document.functions).toEqual([]);
     expect(document.resolve()).toEqual({ specs: 3, crowded: true });
     const again = local.loadTextSync(stringify(document.merged()), { file: 'merged.yml' });

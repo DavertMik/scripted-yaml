@@ -20,7 +20,7 @@ beforeAll(() => {
 
 describe('the built package', () => {
   test('the build produces what package.json points at', () => {
-    expect(manifest.exports['.']).toEqual({ types: './dist/index.d.ts', import: './dist/index.js' });
+    expect(manifest.exports['.']).toEqual({ types: './dist/index.d.ts', browser: './dist/core.js', import: './dist/index.js' });
     for (const path of [manifest.exports['.'].import, manifest.exports['.'].types, manifest.main, manifest.types, manifest.bin['scripted-yaml']]) {
       expect(existsSync(join(root, path))).toBe(true);
     }
@@ -28,7 +28,7 @@ describe('the built package', () => {
 
   test('the types name the public classes', () => {
     const types = readFileSync(join(root, 'dist/core.d.ts'), 'utf8') + readFileSync(join(root, 'dist/index.d.ts'), 'utf8');
-    for (const name of ['ScriptedYaml', 'Document', 'Problem', 'ValidationFailed', 'ResolveFailed', 'Formula', 'Text', 'Files', 'MemoryFiles', 'DiskFiles', 'Marked']) expect(types).toContain(name);
+    for (const name of ['ScriptedYaml', 'Document', 'Problem', 'ValidationFailed', 'ResolveFailed', 'Formula', 'Text', 'FileSystem', 'Marked']) expect(types).toContain(name);
   });
 
   test('the bundle keeps its dependencies outside: they are installed with the package', () => {
@@ -44,13 +44,13 @@ describe('the built package', () => {
     const main: Record<string, any> = await import('scripted-yaml');
     // biome-ignore lint/suspicious/noExplicitAny: the two entries are compared name by name
     const core: Record<string, any> = await import('scripted-yaml/core');
-    for (const name of ['Document', 'Problem', 'ValidationFailed', 'ResolveFailed', 'Formula', 'Text', 'Files', 'MemoryFiles']) expect(main[name]).toBe(core[name]);
+    for (const name of ['Document', 'Problem', 'ValidationFailed', 'ResolveFailed', 'Formula', 'Text']) expect(main[name]).toBe(core[name]);
     expect(new main.ScriptedYaml()).toBeInstanceOf(core.ScriptedYaml);
     const failure = await new main.ScriptedYaml().loadText('a!: nope\n').catch((error: unknown) => error);
     expect(failure).toBeInstanceOf(core.ValidationFailed);
   });
 
-  test('"scripted-yaml/core" bundles for a browser with no node: import, and validates, loads, resolves and merges there', () => {
+  test('"scripted-yaml" bundles for a browser as its core, with no node: import, and validates, loads, resolves and merges there', () => {
     const entry = join(fixtures, 'package/browser.mjs');
     const out = join(root, 'dist-browser-test.js');
     try {
