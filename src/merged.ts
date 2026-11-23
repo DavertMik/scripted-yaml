@@ -2,6 +2,7 @@ import { Entry, ListNode, MapNode, type Node } from './node.js';
 import type { Problems } from './problem.js';
 import { Scope } from './scope.js';
 import type { Source } from './source.js';
+import { put } from './own.js';
 
 /**
  * A file with `$extends` applied, written as one file that needs no base. Keys stay as written and
@@ -62,7 +63,7 @@ export class MergedForm {
     const data: Record<string, unknown> = {};
     const bases: Entry[] = [];
     for (const entry of map.entries) {
-      data[entry.key.raw] = MergedForm.node(entry.value, reads);
+      put(data, entry.key.raw, MergedForm.node(entry.value, reads));
       if (entry.base && reads(entry)) bases.push(entry.base);
     }
     if (bases.length > 0) data[MergedForm.keyword] = MergedForm.bases(bases, reads);
@@ -73,7 +74,7 @@ export class MergedForm {
     const data: Record<string, unknown> = {};
     const deeper: Entry[] = [];
     for (const base of bases) {
-      data[base.key.raw] = MergedForm.node(base.value, reads);
+      put(data, base.key.raw, MergedForm.node(base.value, reads));
       if (base.base && reads(base)) deeper.push(base.base);
     }
     if (deeper.length > 0) data[MergedForm.keyword] = MergedForm.bases(deeper, reads);

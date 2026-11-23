@@ -82,9 +82,18 @@ export class Text extends Expression {
     return out + this.source.slice(at);
   }
 
-  private static show(value: unknown): string {
+  /**
+   * How a value of `{{ }}` reads in text. A number drops the noise of binary floats
+   * (`4.90 * 3` reads 14.7, not 14.700000000000001); a date, time or duration reads as written
+   * (2026-11-22, not "2026-11-22"); lists and maps are shown as JSON.
+   */
+  static show(value: unknown): string {
     if (value === null || value === undefined) return '';
-    return typeof value === 'object' ? JSON.stringify(value) : String(value);
+    if (typeof value === 'number') return Number.isFinite(value) ? String(Number(value.toPrecision(15))) : String(value);
+    if (typeof value !== 'object') return String(value);
+    const json = (value as { toJSON?: () => unknown }).toJSON?.();
+    if (typeof json === 'string') return json;
+    return JSON.stringify(value, (_key, item) => (typeof item === 'number' && Number.isFinite(item) ? Number(item.toPrecision(15)) : item));
   }
 
   private fail(message: string): void {
