@@ -150,22 +150,12 @@ Validation runs neither and evaluates no formulas.
 
 ## Editing rules in a UI
 
-YAML is the source of truth, but the owner of a rule should not have to read YAML to change it.
-Ask your coding agent to build an editor with the `scripted-yaml-ui` [skill](#skills): it fits the
-editor into the application you already have, or builds a small standalone one.
-
-Every file is a card with a dimmed preview, and files that share a `$dsl` are stacked. Pick a card
-to edit it in a sidebar: one control per field, chosen from the schema; formulas with syntax
-highlighting; lists as blocks you can drag, add and remove; and a switch to raw YAML. Saving
-changes only the edited lines of the file.
+Bundle a rule editor into your current UI with the `scripted-yaml-ui` [skill](#skills).
 
 <p align="center">
   <img src="docs/images/editor-ui.png" width="880"
        alt="An editor built with the skill: rule files as cards with a dimmed YAML preview on the left, and shop.yml open in a sidebar on the right, with its discount codes as collapsible blocks, text and number inputs, and highlighted formulas">
 </p>
-
-The editor writes the files in your working tree, and only in local or development mode: it shows
-that it edits local files, and you review the change with `git diff` and commit it.
 
 ## Examples
 
