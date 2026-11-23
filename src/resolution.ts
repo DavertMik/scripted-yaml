@@ -7,6 +7,7 @@ import { type Entry, ListNode, MapNode, type Node, ScalarNode } from './node.js'
 import { type Located, Problem, ResolveFailed, ScriptedYamlError } from './problem.js';
 import { Scope } from './scope.js';
 import { Source } from './source.js';
+import { has, put } from './own.js';
 
 type FeelResult = ReturnType<typeof evaluate>;
 
@@ -52,6 +53,7 @@ export class Resolution {
   private readonly promised: string[] = [];
   private readonly broken: Problem[] = [];
   private readonly afterwards: (() => void)[] = [];
+  private readonly indexes = new WeakMap<Entry[], Map<string, Entry>>();
 
   constructor(
     private readonly source: Source,
@@ -88,9 +90,9 @@ export class Resolution {
    */
   probe(source: string): unknown {
     const [head, ...path] = source.split('.');
-    const start = this.effective(this.source.root, this.top).find((entry) => entry.name === head);
+    const start = this.named(this.source.root, head ?? '', this.top);
     if (start && !start.key.keyword) {
-      const reach = this.scope.walk(start, path, (map, name) => this.effective(map, this.top).find((entry) => entry.name === name));
+      const reach = this.scope.walk(start, path, (map, name) => this.named(map, name, this.top));
       if (reach.rest.length === 0) return reach.entry ? this.entryView(reach.entry, this.top) : this.viewOf(reach.node, this.top);
     }
     const formula = new Formula(source);
@@ -112,12 +114,12 @@ export class Resolution {
       const name = entry.name;
       if (entry.key.keyword && name !== '$value') continue;
       if (entry.key.kind === 'marked') {
-        out[name] = entry.marked?.value;
+        put(out, name, entry.marked?.value);
         this.afterwards.push(() => {
-          if (this.read.has(entry)) out[name] = this.read.get(entry);
+          if (this.read.has(entry)) put(out, name, this.read.get(entry));
         });
       } else if (!(entry.value instanceof MapNode) || this.kept(entry.value, env)) {
-        out[name] = this.output(entry.value, env);
+        put(out, name, this.output(entry.value, env));
       }
     }
     this.checkRules(node, env);
@@ -135,7 +137,7 @@ export class Resolution {
     const out: Record<string, unknown> = {};
     for (const entry of this.effective(node, env)) {
       if (entry.key.keyword) continue;
-      if (!(entry.value instanceof MapNode) || entry.key.kind !== 'plain' || this.kept(entry.value, env)) out[entry.name] = this.entryView(entry, env);
+      if (!(entry.value instanceof MapNode) || entry.key.kind !== 'plain' || this.kept(entry.value, env)) put(out, entry.name, this.entryView(entry, env));
     }
     return out;
   }
@@ -202,6 +204,18 @@ export class Resolution {
     return items;
   }
 
+  /** The entry of this name among a map's effective entries. Indexed once per list of entries, which does not change during a resolution. */
+  private named(map: MapNode, name: string, env: Env): Entry | undefined {
+    const entries = this.effective(map, env);
+    let index = this.indexes.get(entries);
+    if (!index) {
+      index = new Map();
+      for (const entry of entries) if (!index.has(entry.name)) index.set(entry.name, entry);
+      this.indexes.set(entries, index);
+    }
+    return index.get(name);
+  }
+
   /** The entries of a map after its `$when` cases: every case that matches applies, in order; `$else` when none did. */
   private effective(map: MapNode, from: Env): Entry[] {
     const top = map === this.source.root;
@@ -229,7 +243,7 @@ export class Resolution {
     const entries = this.effective(map, env);
     for (const name of map.shape.fields.keys()) {
       const entry = entries.find((candidate) => candidate.name === name);
-      context[name] = !entry ? null : entry.key.kind === 'marked' ? entry.value.toData() : this.entryView(entry, env);
+      put(context, name, !entry ? null : entry.key.kind === 'marked' ? entry.value.toData() : this.entryView(entry, env));
     }
     for (const rule of map.shape.rules) if (!rule.holds(context)) this.broken.push(this.problem(map, rule.message));
   }
@@ -287,12 +301,12 @@ export class Resolution {
       const target = this.scope.resolve(reader, ref);
       if (target.kind === 'vars') {
         const bag = (context.vars ??= {}) as Record<string, unknown>;
-        if (ref.path[0] === undefined) Object.assign(bag, this.vars);
-        else bag[ref.path[0]] = this.vars[ref.path[0]] ?? null;
+        if (ref.path[0] === undefined) for (const [name, value] of Object.entries(this.vars)) put(bag, name, value);
+        else put(bag, ref.path[0], has(this.vars, ref.path[0]) ? (this.vars[ref.path[0]] ?? null) : null);
       } else if (target.kind === 'each') {
         context[ref.head] = env.given(target.owner);
       } else if (target.kind === 'given') {
-        if (!(ref.head in context)) context[ref.head] = null;
+        if (!has(context, ref.head)) context[ref.head] = null;
       } else if (target.kind === 'base') {
         context.base = this.entryView(target.entry, env);
       } else if (target.kind === 'function') {
@@ -302,7 +316,7 @@ export class Resolution {
       } else if (target.kind === 'import') {
         context[ref.head] = this.imported(ref.head, ref.call);
       } else if (target.kind === 'key' && !(ref.inFilter && target.entry.value === reader)) {
-        const reach = this.scope.walk(target.entry, ref.path, (map, name) => this.effective(map, env).find((entry) => entry.name === name));
+        const reach = this.scope.walk(target.entry, ref.path, (map, name) => this.named(map, name, env));
         keys.push({ names: [ref.head, ...reach.steps], value: () => (reach.entry ? this.entryView(reach.entry, env) : this.viewOf(reach.node, env)) });
       }
     }
@@ -313,7 +327,11 @@ export class Resolution {
       let holder = context;
       let covered = false;
       for (const name of key.names.slice(0, -1)) {
-        if (!(name in holder)) shells.add((holder[name] = {}));
+        if (!has(holder, name)) {
+          const shell = {};
+          put(holder, name, shell);
+          shells.add(shell);
+        }
         const next = holder[name];
         if (next === null || typeof next !== 'object' || !shells.has(next)) {
           covered = true;
@@ -322,7 +340,7 @@ export class Resolution {
         holder = next as Record<string, unknown>;
       }
       const last = key.names.at(-1)!;
-      if (!covered && !(last in holder)) holder[last] = key.value();
+      if (!covered && !has(holder, last)) put(holder, last, key.value());
     }
     return context;
   }

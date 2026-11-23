@@ -1,5 +1,6 @@
 import { MapNode, type Node } from './node.js';
 import type { Located, Problems } from './problem.js';
+import { put } from './own.js';
 
 /** One variable a file declares under `$vars`. */
 export class Variable {
@@ -70,7 +71,7 @@ export class Variables {
   /** The values formulas see: defaults filled in, empty text turned into null. */
   values(input: Record<string, unknown>): { values: Record<string, unknown>; missing: string[]; mismatches: string[] } {
     const values: Record<string, unknown> = {};
-    for (const [name, value] of Object.entries(input)) values[name] = value === '' || value === undefined ? null : value;
+    for (const [name, value] of Object.entries(input)) put(values, name, value === '' || value === undefined ? null : value);
     const missing: string[] = [];
     const mismatches: string[] = [];
     for (const variable of this.declared.values()) {

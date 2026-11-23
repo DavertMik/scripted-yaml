@@ -1,6 +1,7 @@
 import type { Expression } from './expression.js';
 import type { Located } from './problem.js';
 import type { Shape } from './schema.js';
+import { put } from './own.js';
 
 /** A key as written, split at its last `!` into a name and a marker. */
 export class Key {
@@ -143,9 +144,18 @@ export class MapNode extends Node {
   /** The shape of the schema this map was checked against. */
   shape?: Shape;
 
+  /** Entries by name, the first of each name; rebuilt when the entries change. */
+  private index?: Map<string, Entry>;
+  private indexed = -1;
+
   /** The entry with this name, whatever its marker. */
   get(name: string): Entry | undefined {
-    return this.entries.find((entry) => entry.name === name);
+    if (!this.index || this.indexed !== this.entries.length) {
+      this.index = new Map();
+      for (const entry of this.entries) if (!this.index.has(entry.name)) this.index.set(entry.name, entry);
+      this.indexed = this.entries.length;
+    }
+    return this.index.get(name);
   }
 
   /** Like `get`, and also a key that only a `$when` case adds. */
@@ -177,16 +187,18 @@ export class MapNode extends Node {
     const entry = new Entry(raw, value, this, from.file, from.line, from.column);
     if (at === undefined) this.entries.push(entry);
     else this.entries.splice(at, 0, entry);
+    this.index = undefined;
     return entry;
   }
 
   remove(entry: Entry): void {
     this.entries.splice(this.entries.indexOf(entry), 1);
+    this.index = undefined;
   }
 
   toData(): Record<string, unknown> {
     const data: Record<string, unknown> = {};
-    for (const entry of this.entries) data[entry.key.raw] = entry.value.toData();
+    for (const entry of this.entries) put(data, entry.key.raw, entry.value.toData());
     return data;
   }
 

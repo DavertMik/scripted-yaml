@@ -8,6 +8,7 @@ import { Resolution } from './resolution.js';
 import { Scope } from './scope.js';
 import type { Source } from './source.js';
 import type { Variable } from './variables.js';
+import { put } from './own.js';
 
 /** The application's function for one marker. It receives the value as written; what it returns becomes the value. */
 // biome-ignore lint/suspicious/noExplicitAny: the value is whatever YAML held under the key
@@ -89,7 +90,7 @@ export class Document {
       if (!(node instanceof MapNode)) return node.toData();
       const data: Record<string, unknown> = {};
       for (const entry of node === source.root ? source.data : node.entries) {
-        data[entry.name] = entry.key.kind === 'marked' ? this.mark(entry, markers, problems) : build(entry.value);
+        put(data, entry.name, entry.key.kind === 'marked' ? this.mark(entry, markers, problems) : build(entry.value));
         // A replaced entry is not data, but where a formula reads it as `base`, its markers are called too.
         for (let holder = entry; holder.base && MergedForm.readsBase(scope, holder); holder = holder.base) {
           if (holder.base.key.kind === 'marked') this.mark(holder.base, markers, problems);

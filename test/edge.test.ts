@@ -721,3 +721,31 @@ describe('what the library relies on in feelin', () => {
     expect(evaluate('a and b', { a: true, b: new Command('ls') })).toEqual({ value: null, warnings: [] });
   });
 });
+
+describe('keys named like JavaScript internals', () => {
+  test('a key named constructor, toString or valueOf is read like any other key', async () => {
+    expect(await resolved('constructor: 5\ntoString: 2\nvalueOf: 3\nx!: constructor + toString * valueOf\n')).toEqual({ constructor: 5, toString: 2, valueOf: 3, x: 11 });
+  });
+
+  test('a key named __proto__ is an own key of the result and does not become its prototype', async () => {
+    const result = await resolved('__proto__: { admin: true }\nx: 1\n');
+    expect(Object.keys(result)).toEqual(['__proto__', 'x']);
+    expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+    expect((result as Record<string, unknown>).admin).toBeUndefined();
+  });
+
+  test('vars.toString is null when the application does not pass it', async () => {
+    expect(await resolved('x!: vars.toString\n')).toEqual({ x: null });
+  });
+});
+
+describe('values in text', () => {
+  test('a number reads without the noise of binary floats', async () => {
+    expect((await resolved('p!: 4.90 * 3\nm: Total {{ p }}\n')).m).toBe('Total 14.7');
+    expect((await resolved('m: L {{ [0.1 + 0.2, 1] }}\n')).m).toBe('L [0.3,1]');
+  });
+
+  test('a date, a time and a duration read as written, without quotes', async () => {
+    expect((await resolved('m: Due {{ date("2026-11-22") }}, in {{ duration("P2D") }}\n')).m).toBe('Due 2026-11-22, in P2D');
+  });
+});
