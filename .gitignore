@@ -4,3 +4,4 @@ dist/
 .DS_Store
 # the first draft of the spec: it describes private projects, so it stays local
 docs/archive/
+examples/admin-ui/
