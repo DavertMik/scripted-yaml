@@ -6,7 +6,7 @@ Let an agent write 99% of your application. Keep the important 1% under your dir
 
 <p align="center">
   <img src="docs/images/spec-and-agent.png" width="880"
-       alt="The agent writes the application code once; the code reads the YAML spec live at runtime; the developer switches rules in the spec and the app follows, with no rebuild">
+       alt="Agentic development built around business logic: the agent builds the app around the rules; the application code runs the rules from the YAML spec; the developer switches a rule and the app follows">
 </p>
 
 - **Some code is too important to leave buried in generated implementation.** Pricing rules,
@@ -45,9 +45,12 @@ We selected YAML because it is readable and compact (no curly braces, no types).
 - Schema `$schema` (inline) or usef in multiple files via `$dsl`
 - Functions obtained from application or declared internally
 
-### Example: a nav bar by plan
+## Brief
 
-**1. Rules buried in JSX.** Which plans see Reports? You'd have to ask an agent and trust its guess.
+### Flexible Navbar
+
+NavBar can display items based on customer's subscription. Which menu items are shown?
+This is defined in JSX which you never read:
 
 ```jsx
 export function NavBar({ plan }) {
@@ -64,7 +67,7 @@ export function NavBar({ plan }) {
 
 `plan !== 'free'` quietly gives Reports to any new plan, and the same checks spread to sidebars and route guards.
 
-**2. Move the rules to YAML.** One file you own; `$if!` drops an item when false.
+Instead of guessing and relying on agent's answers, have this information written as YAML file:
 
 ```yaml
 # navbar.yml
@@ -85,7 +88,7 @@ navbar:
     $if!: vars.plan = "free"
 ```
 
-**3. React only renders.** No plan checks left; the agent can keep working on this part.
+Let React render business rules based on conditions you set:
 
 ```jsx
 import { ScriptedYaml } from 'scripted-yaml/core';
@@ -105,9 +108,9 @@ export function NavBar({ plan }) {
 }
 ```
 
-For `pro` this renders Dashboard and Reports.
+Now you are in full control of menu bar. You know which plans explose which menu items.
 
-**4. Change a rule in one line.** Give Team to `pro`, no component change:
+Add access to team dashboard for users of Pro plan with no code change:
 
 ```diff
    - label: Team
@@ -116,23 +119,7 @@ For `pro` this renders Dashboard and Reports.
 +    $if!: vars.plan in ["pro", "team"]
 ```
 
-## Small examples
-
-### A UI definition
-
-- Edit `title` or move a field between groups directly in YAML.
-- The UI code renders this structure; it does not own another copy of the layout.
-
-```yaml
-title: Edit profile
-groups:
-  - title: Personal details
-    fields: [name, email]
-  - title: Preferences
-    fields: [language, timezone]
-```
-
-### An RPG character
+### GameDev
 
 - Change `hp_per_level` to rebalance the character.
 - `hit_points!` is a formula: at level 7, this character has 84 hit points.
@@ -144,7 +131,7 @@ hp_per_level: 12
 hit_points!: level * hp_per_level
 ```
 
-### A discount rule
+### Ecommerce
 
 - Change the threshold or formula in one place.
 - At a subtotal of 240, the discount is 24 and the message is `You save 24.`
@@ -168,7 +155,7 @@ Node 22+ or Bun. Importing `.ts` files requires Bun or Node 22.18+.
 **Load only trusted files:** loading runs `$import` modules and marker handlers.
 Validation runs neither and evaluates no formulas.
 
-## Complete examples
+## Examples
 
 Complete files: [`examples/`](examples).
 
