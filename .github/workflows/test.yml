@@ -1,0 +1,35 @@
+# Runs the type check and the tests on every push and pull request.
+# Bun runs the suite; Node 22 and 24 check that the built package loads and works by name.
+name: Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    name: Bun + Node ${{ matrix.node }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - run: bun install --frozen-lockfile
+
+      # The build comes first: the type check and test/package.test.ts read dist/.
+      - run: bun run build
+      - run: bun run typecheck
+      - run: bun test
