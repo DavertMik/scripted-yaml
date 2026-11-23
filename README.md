@@ -9,32 +9,25 @@ Let an agent write 99% of your application. Keep the important 1% under your dir
        alt="Agentic development built around business logic: the agent builds the app around the rules; the application code runs the rules from the YAML spec; the developer switches a rule and the app follows">
 </p>
 
-- **Some code is too important to leave buried in generated implementation.** Pricing rules,
-  RPG formulas, UI structure, and business processes determine what your application does.
-  You need to read, understand, and change them when needed.
-- **You control YAML specs; agents execute them.** YAML specs are executable application
-  definitions, not outdated specs or documentation to reimplement.
-- **Self-contained YAML, with scripting sugar.** Keep inputs, data, formulas, conditions,
-  together for easy editing.
-- **Declare state machines, UIs, and business processes in YAML.** Describe states, transitions,
-  screens, and workflow steps as data and rules; application code interprets the definitions.
-- **Each YAML spec can choose its own DSL.** UI, business logic, validation rules, and access control can use
-  different Domain Specific Languages in one project.
-- **Structure checking—like TypeScript for YAML.** A defined DSL checks required fields,
-  nested shapes, and allowed values.
-- **Use the included [agent skill](skills/scripted-yaml-convert/SKILL.md) to migrate existing logic.**
-  Ask your agent to extract business rules from application code into YAML specs, preserving
-  the existing behavior.
+- Some code is too important to leave buried in generated implementation.
+- You control YAML specs; agents execute them.
+- Self-contained YAML, with scripting sugar
+- Declare state machines, UIs, and business processes in YAML
+- Each YAML spec can choose its own DSL
+- Structure checking—like TypeScript for YAML
+- Skill for business logic migration included
 
 ## Application code and business rules
+
+
+
+**Application code** is fully written by agent, takes some decisions implicilty, without asking you, writing them into code.
+**Business rules** expose implemented decisions for better underestanding and for further change.
 
 <p align="center">
   <img src="docs/images/rules-define-code.png" width="880"
        alt="A big circle of application code (React components, file operations, API requests, styling) and a small circle of business rules that defines it">
 </p>
-
-**Application code** is fully written by agent, takes some decisions implicilty, without asking you, writing them into code.
-**Business rules** expose implemented decisions for better underestanding and for further change.
 
 ### Why YAML?
 
