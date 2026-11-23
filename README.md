@@ -18,7 +18,7 @@ Let an agent write 99% of your application. Keep the important 1% under your dir
 - Declare state machines, UIs, and business processes in YAML
 - Each YAML spec can choose its own DSL
 - Structure checking—like TypeScript for YAML
-- Skill for business logic migration included
+- Skills for writing rules, migrating business logic, and building an editor UI
 
 ## Application code and business rules
 
@@ -705,25 +705,9 @@ $ scripted-yaml validate ui.yml --markers js
 ok       ui.yml
 ```
 
-### Agent skills
-
-The package carries two skills for coding agents: one for writing and checking these files, one for
-moving existing application logic into them.
-
-```
-npx scripted-yaml skill                    # print the skills
-npx scripted-yaml skill --install          # install into this project
-npx scripted-yaml skill --install global   # install into your home directory
-```
-
-`--install` copies them into `.claude/skills` and `.agents/skills`, which Claude Code, Codex and
-OpenCode read.
-
 ## Reference
 
 - [Specification](SPEC.md): schemas, imports, inheritance, evaluation rules, and embedded tests.
-- [Agent skill](skills/scripted-yaml/SKILL.md): authoring and validation instructions.
-- [Conversion skill](skills/scripted-yaml-convert/SKILL.md): moving existing application logic into short YAML files.
 - [Templates](docs/templates.md): what each `scripted-yaml/<name>` takes and gives; the files are in [`templates/`](templates).
 - [Examples](examples): shops, UI, RPG, state machines, menus, forms, routing, pipelines, and Markdown.
 
@@ -745,5 +729,27 @@ bun run build       # dist/index.js, dist/cli.js and the type declarations
 | `$keyword:` | inputs, conditions, repetition, schemas, imports, and embedded tests |
 
 Formulas use FEEL, not JavaScript. [Expression examples](docs/examples) · [Full syntax](SPEC.md).
+
+## Skills
+
+The package carries three skills for coding agents:
+
+| Skill | For |
+|---|---|
+| [`scripted-yaml`](skills/scripted-yaml/SKILL.md) | writing and checking scripted-yaml files: formulas, `$vars`, `$schema`, `$dsl`, `$tests`, and `scripted-yaml validate` |
+| [`scripted-yaml-convert`](skills/scripted-yaml-convert/SKILL.md) | moving business rules out of application code into short YAML files, with tests proving nothing changed |
+| [`scripted-yaml-ui`](skills/scripted-yaml-ui/SKILL.md) | building an admin UI to review and edit the files: cards, a sidebar form, a control per field, raw YAML on demand, saving to local files in development only |
+
+Install them with the package's command line:
+
+```
+npx scripted-yaml skill                    # print the skills
+npx scripted-yaml skill --install          # install into this project
+npx scripted-yaml skill --install global   # install into your home directory
+```
+
+`--install` copies each skill, with its examples, into `.claude/skills` and `.agents/skills`, which
+Claude Code, Codex and OpenCode read. Then ask your agent in plain words, for example "move the
+discount logic into YAML" or "build an editor for our rule files".
 
 Licence: MIT.

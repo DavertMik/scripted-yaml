@@ -128,7 +128,7 @@ describe('scripted-yaml', () => {
 });
 
 describe('scripted-yaml skill', () => {
-  const skills = ['scripted-yaml', 'scripted-yaml-convert'];
+  const skills = ['scripted-yaml', 'scripted-yaml-convert', 'scripted-yaml-ui'];
   const source = (name: string, file: string) => readFileSync(join(root, 'skills', name, file), 'utf8');
   const at = (cwd: string, home: string, ...args: string[]) => {
     const run = Bun.spawnSync(['bun', join(root, 'src/cli.ts'), 'skill', ...args], { cwd, env: { ...process.env, HOME: home } });
