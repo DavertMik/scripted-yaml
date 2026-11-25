@@ -42,7 +42,7 @@ types and names. So nothing a file computes may depend on its DSL:
 - a list item is addressed by its `id` field (`stages.explore`) with or without a DSL; a schema may name another field;
 - a variable the file reads but does not declare is a warning, not an error, and is null unless the application passes it. A DSL can make such names known (`STAGE_DIR`, or any upper-case name), which removes the warning and nothing else.
 
-This holds for functions too. A formula can call only FEEL's built-ins, a
+This holds for functions too. A formula can call only the built-ins (3.3), a
 function the file defines or declares under `$functions`, or a function the
 file imports. `fileExists(...)` in a pipeline works because that pipeline has
 `$import: { ./pipeline-host.ts: [fileExists] }`, or because it declares
@@ -93,7 +93,7 @@ free_shipping!: cart.total >= 50 and not(cart.oversized)
 
 **Formulas are written in FEEL**, the expression language of the DMN standard,
 run by the `feelin` package. It is used as it is: scripted-yaml adds no syntax
-and removes none. `docs/examples/` holds 138 examples, each executed by
+and removes none; it adds ten text functions, listed below. `docs/examples/` holds 138 examples, each executed by
 `bun test` and compared with the result written beside it.
 
 | Kind | FEEL |
@@ -107,9 +107,36 @@ and removes none. `docs/examples/` holds 138 examples, each executed by
 | Pick items | `cart.items[price > 10]`, `cart.items[category = "books"].name` |
 | Lists | `count(list)`, `sum(list)`, `min(list)`; positions start at 1 |
 | Loops | `for item in list return item.price * item.qty`, `some item in list satisfies …`, `every …` |
-| Text functions | `starts with(text, "a")`, `upper case(text)`, `string join(list, ", ")` |
+| Text functions | `starts with(text, "a")`, `string join(list, ", ")` |
+| Text functions the library adds | `trim`, `lowercase`, `uppercase`, `capitalize`, `slug`, `snakecase`, `kebabcase`, `camelcase`, `pascalcase`, `titlecase` |
 | Calls | `fileExists("a.yml")`, an imported function (3.7); always with brackets |
 | Named steps | `{ a: 1, b: a + 1 }.b` |
+
+The last row is the one addition to FEEL: ten functions of one text, each
+named in one word, that give null for anything that is not
+text. Case changes come from the `change-case` package and `slug` from
+`@sindresorhus/slugify`.
+
+| Call | Result |
+|---|---|
+| `trim("  Summer Sale ")` | `"Summer Sale"` |
+| `lowercase("Summer Sale")` | `"summer sale"` |
+| `uppercase("Summer Sale")` | `"SUMMER SALE"` |
+| `capitalize("summer sale")` | `"Summer sale"` |
+| `slug("Summer Sale: 50% off!")` | `"summer-sale-50-off"` |
+| `snakecase("order lineItems")` | `"order_line_items"` |
+| `kebabcase("order lineItems")` | `"order-line-items"` |
+| `camelcase("order line_items")` | `"orderLineItems"` |
+| `pascalcase("order line_items")` | `"OrderLineItems"` |
+| `titlecase("order line_items")` | `"Order Line Items"` |
+
+`docs/functions.md` lists every built-in, FEEL's and these, with a tested
+example of each.
+
+They exist so that a file does not spell text shaping out in `replace(…)`
+chains or in `$functions`: that is not a business rule. A transformation not
+in this list is a function the application passes (3.7), or the application
+passes the finished value as a variable.
 
 A formula may span lines and hold `//` comments. It is always one expression:
 there is no assignment and no statement.
@@ -151,7 +178,7 @@ A name in a formula is the path to what it names, spelled as in the file.
 - `prerequisites.local` is the value at `prerequisites:` → `local`. An item of a list is addressed by its `id` field: `stages.explore`.
 - A bare name is looked up in this order: names the surrounding construct gives (`$as`, a function's parameters, the `with` names of a field); sibling keys; each enclosing map; the root; then functions (3.7).
 - A name found nowhere is a validation error: "unknown name `origin`; for text, remove the `!`". Names a formula declares itself (loop variables, function parameters, keys inside `{ }`) are its own. Inside `[ ]` an unknown name is taken as a field of the item and is not reported.
-- A key may not have the name of a function the file defines or imports. Otherwise a key added later would silently change what existing formulas mean. A key may have the name of a FEEL built-in (`sum`, `today`).
+- A key may not have the name of a function the file defines or imports. Otherwise a key added later would silently change what existing formulas mean. A key may have the name of a built-in (`sum`, `today`, `slug`). One formula may not both read such a key and call the built-in (`slug = slug(title)`): that is a validation error, and the call goes into a key of its own.
 - `key` and `key!` in the same map are a validation error.
 - A key that a formula refers to must be an identifier: `test_command`, not `test-command`.
 
@@ -221,7 +248,7 @@ $vars:
 
 ### 3.7 Functions and `$import`
 
-Besides FEEL's built-ins, a formula may call a function the file defines,
+Besides the built-ins (3.3), a formula may call a function the file defines,
 one it declares for the application to pass, or one it imports.
 
 **`$functions`** defines helpers in the file. The key is the name with its
@@ -252,7 +279,7 @@ specs!: fileCount("*.spec.ts")
 ```
 
 Such a function has the same rules as an imported one: it is not the name of
-a FEEL built-in, of another function or of a key, and it is synchronous. A
+a built-in, of another function or of a key, and it is synchronous. A
 declared function the application does not pass, or passes as something
 other than a synchronous function, fails `resolve` before anything is
 computed. `validate` checks only that the name is declared.
@@ -590,7 +617,7 @@ All of it is synchronous. What it checks, in order:
 2. every `$` key is a known keyword, and `key` and `key!` do not both exist;
 3. every marker has a registered name;
 4. every formula and every `{{ }}` is valid FEEL;
-5. every name in a formula is a key of the file, a declared variable, a FEEL built-in, or a function the file defines or imports;
+5. every name in a formula is a key of the file, a declared variable, a built-in, or a function the file defines or imports;
 6. the file fits its `$schema` or its `$dsl`;
 7. every target of an `$extends` patch exists in the base;
 8. every `rules:` entry of the schema holds, on each item where no field the rule reads is a `key!` formula, and the item has no `$when`. Text with `{{ }}` and a marked value are seen as written, as `resolve` sees a marked value. The other items are checked by `resolve`.
@@ -1072,7 +1099,7 @@ on Node 22.21 and on Bun).
 
 **Decided** (2026-11-20).
 
-1. A function a formula calls comes only from FEEL, `$functions` or `$import`. The application passes only the functions a file declares under `$functions` (changed 2026-11-22; until then it passed none).
+1. A function a formula calls comes only from FEEL, the library's ten text functions (3.3, added 2026-11-25), `$functions` or `$import`. The application passes only the functions a file declares under `$functions` (changed 2026-11-22; until then it passed none).
 2. `$import` has built-in importers for `.ts`, `.js`, `.yml` / `.yaml` and `.md`, chosen by extension. Any other extension is an error.
 3. Imported functions are synchronous, and the library enforces it.
    Validation of a formula is its syntax and whether its names are defined. Nothing else, and nothing is evaluated.

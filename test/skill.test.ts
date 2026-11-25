@@ -106,7 +106,7 @@ describe('skills/scripted-yaml/SKILL.md', () => {
 
   test('import.yml computes what the skill shows', () => {
     const run = cli('parse', 'import.yml');
-    expect(JSON.parse(run.out)).toEqual({ title: 'Summer Sale', path: '/pages/summer-sale', free_from: 'Free shipping from 50 EUR', releases: 'We release on Tuesdays.\n' });
+    expect(JSON.parse(run.out)).toEqual({ title: 'Summer Sale', path: '/pages/summer-sale', vat: 0.19, free_from: 'Free shipping from 50 EUR', releases: 'We release on Tuesdays.\n' });
     expect(skill).toContain('`path` as `"/pages/summer-sale"`');
   });
 });

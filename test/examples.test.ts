@@ -10,7 +10,7 @@ const root = join(import.meta.dir, '..');
 /** The functions an application plugs in. They are not part of FEEL. */
 class HostFunctions {
   fileExists = (path: string) => path === 'coverage.tests.yml';
-  capitalize = (text: string) => text[0]!.toUpperCase() + text.slice(1);
+  ownerOf = (service: string) => (service === 'checkout' ? 'payments' : 'platform');
   truncate = (text: string, length: number) => (text.length > length ? `${text.slice(0, length)}…` : text);
   glob = (path: string, pattern: string) => new Bun.Glob(pattern).match(path);
 }

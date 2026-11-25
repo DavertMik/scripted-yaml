@@ -260,6 +260,15 @@ describe('$dsl', () => {
     const text = '$schema:\n  required: [items*:Item]\n  Item:\n    required: [id]\n    rules:\n      - valid!: id != nme\n        message: no\nitems: []\n';
     expect(messages(await errorsOf(text))).toContain('nme');
   });
+
+  test('a rule that cannot be computed says so, instead of looking like a rule that failed', async () => {
+    const schema = '$schema:\n  required: [items*:Item]\n  Item:\n    required: [id, size]\n    rules:\n      - valid!: size.width > 0\n        message: too narrow\n';
+    const broken = messages(await errorsOf(schema + 'items:\n  - id: a\n    size: 5\n'));
+    expect(broken).toContain('cannot be computed');
+    expect(broken).not.toContain('too narrow');
+    expect(messages(await errorsOf(schema + 'items:\n  - id: a\n    size: { width: 0 }\n'))).toContain('too narrow');
+    expect(await errorsOf(schema + 'items:\n  - id: a\n    size: { width: 3 }\n')).toEqual([]);
+  });
 });
 
 describe('$tests', () => {

@@ -121,18 +121,18 @@ export class Checker {
     for (const error of expression.errors) this.problems.error(at, error);
   }
 
-  /** A function may not have the name of a FEEL built-in, and a key may not have the name of a function. */
+  /** A function may not have the name of a built-in function, and a key may not have the name of a function. */
   private checkFunctionNames(): void {
     for (const [name, entry] of this.source.functions) {
-      if (Builtins.has(name)) this.problems.error(entry, `the function "${name}" has the name of a FEEL built-in; give it another name`);
+      if (Builtins.has(name)) this.problems.error(entry, Builtins.taken('function', name));
       if (this.source.imported.has(name)) this.problems.error(entry, `"${name}" is both defined in $functions and imported`);
     }
     for (const [name, hosted] of this.source.hosted) {
-      if (Builtins.has(name)) this.problems.error(hosted.entry, `the function "${name}" has the name of a FEEL built-in; give it another name`);
+      if (Builtins.has(name)) this.problems.error(hosted.entry, Builtins.taken('function', name));
       if (this.source.imported.has(name)) this.problems.error(hosted.entry, `"${name}" is both declared in $functions and imported`);
     }
     for (const [name, spec] of this.source.imported) {
-      if (Builtins.has(name)) this.problems.error(spec.entry, `the imported name "${name}" is the name of a FEEL built-in; export it under another name`);
+      if (Builtins.has(name)) this.problems.error(spec.entry, Builtins.taken('imported name', name));
     }
     const taken = (entry: Entry) => !entry.key.keyword && (this.source.functions.has(entry.name) || this.source.hosted.has(entry.name) || this.source.imported.has(entry.name));
     const visit = (node: Node): void => {
@@ -160,12 +160,20 @@ export class Checker {
     const reads = new Set<string>();
     const reaches: { ref: Ref; reach: Reach }[] = [];
     for (const formula of expression.formulas) {
+      const called = new Set<string>();
+      const keys = new Set<string>();
       for (const ref of formula.refs) {
         const reach = this.checkRef(node, ref);
         if (reach === false) continue;
         if (!ref.call) reads.add(ref.name);
-        if (reach !== true) reaches.push({ ref, reach });
+        if (reach === true && ref.call && Builtins.has(ref.head)) called.add(ref.head);
+        if (reach !== true) {
+          reaches.push({ ref, reach });
+          keys.add(ref.head);
+        }
       }
+      // `feelin` holds one value per name: the key and the function cannot both be given to one formula.
+      for (const name of called) if (keys.has(name)) this.problems.error(this.at(node), Builtins.clash(name));
     }
     expression.reads = [...reads];
     this.checkOverlap(node, reaches);

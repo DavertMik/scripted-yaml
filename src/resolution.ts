@@ -1,4 +1,5 @@
 import { evaluate } from 'feelin';
+import { Builtins } from './builtins.js';
 import type { Document, Markers } from './document.js';
 import { Formula, Text } from './expression.js';
 import type { LazyFormula } from './lazy-formula.js';
@@ -260,7 +261,10 @@ export class Resolution {
       const entry = entries.find((candidate) => candidate.name === name);
       context[name] = !entry ? null : entry.key.kind === 'marked' ? entry.value.toData() : this.entryView(entry, env);
     }
-    for (const rule of map.shape.rules) if (!rule.holds(context)) this.broken.push(this.problem(map, rule.message));
+    for (const rule of map.shape.rules) {
+      const failure = rule.failure(context);
+      if (failure) this.broken.push(this.problem(map, failure));
+    }
   }
 
   // ── formulas ──
@@ -318,6 +322,8 @@ export class Resolution {
         const bag = (context.vars ??= {}) as Record<string, unknown>;
         if (ref.path[0] === undefined) Object.assign(bag, this.vars);
         else bag[ref.path[0]] = this.vars[ref.path[0]] ?? null;
+      } else if (target.kind === 'builtin') {
+        Builtins.provide(context, ref.head);
       } else if (target.kind === 'each') {
         context[ref.head] = env.given(target.owner);
       } else if (target.kind === 'given') {

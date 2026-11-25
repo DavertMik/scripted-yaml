@@ -38,13 +38,27 @@ export class Rule {
     return this.formula.formulas.flatMap((formula) => formula.refs.filter((ref) => !ref.inFilter && !ref.call).map((ref) => ref.head));
   }
 
-  /** True when the rule holds for these values of the fields. */
-  holds(fields: Record<string, unknown>): boolean {
+  /**
+   * Checks the rule against these values of the fields. Returns nothing when it holds,
+   * the rule's message when it gives anything but true, and a description of the error
+   * when the rule itself cannot be computed, so a broken rule is not mistaken for a failed one.
+   */
+  failure(fields: Record<string, unknown>): string | undefined {
+    const context = { ...fields };
+    for (const formula of this.formula.formulas) for (const ref of formula.refs) if (ref.call) Builtins.provide(context, ref.head);
+    let result: ReturnType<typeof evaluate>;
     try {
-      return evaluate(this.formula.source, fields).value === true;
-    } catch {
-      return false;
+      result = evaluate(this.formula.source, context);
+    } catch (error) {
+      return this.broken((error as Error).message);
     }
+    const real = result.warnings.filter((warning) => !(warning.type === 'NO_PROPERTY_FOUND' && warning.details?.values?.target === null));
+    if (real.length > 0) return this.broken([...new Set(real.map((warning) => warning.message))].join('; '));
+    return result.value === true ? undefined : this.message;
+  }
+
+  private broken(reason: string): string {
+    return `the rule "${this.formula.source}" cannot be computed: ${reason}`;
   }
 }
 
@@ -86,6 +100,7 @@ export class Shape {
       for (const ref of formula.refs) {
         const known = ref.inFilter || this.fields.has(ref.head) || (ref.call && Builtins.has(ref.head));
         if (!known) problems.error(at, `a rule of ${label} reads "${ref.head}", which is not one of its fields`);
+        if (ref.call && Builtins.has(ref.head) && this.fields.has(ref.head)) problems.error(at, `a rule of ${label}: ${Builtins.clash(ref.head)}`);
       }
     }
     this.rules.push(rule);
@@ -146,7 +161,9 @@ export class Schema {
         fields[name] = entry ? entry.value.toData() : null;
         return !entry || entry.key.kind === 'marked' || (entry.key.kind === 'plain' && Schema.settled(entry.value));
       });
-      if (settled && !rule.holds(fields)) problems.error(map, rule.message);
+      if (!settled) continue;
+      const failure = rule.failure(fields);
+      if (failure) problems.error(map, failure);
     }
   }
 

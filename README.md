@@ -1,5 +1,8 @@
 # scripted-yaml
 
+[![Tests](https://github.com/DavertMik/scripted-yaml/actions/workflows/test.yml/badge.svg)](https://github.com/DavertMik/scripted-yaml/actions/workflows/test.yml)
+[![npm](https://img.shields.io/npm/v/scripted-yaml.svg)](https://www.npmjs.com/package/scripted-yaml)
+
 **YAML with a little sugar for formulas, conditions, and scripts.**
 
 Let an agent write 99% of your application. Keep the important 1% under your direct control.
@@ -19,10 +22,8 @@ Let an agent write 99% of your application. Keep the important 1% under your dir
 
 ## Application code and business rules
 
-
-
-**Application code** is fully written by agent, takes some decisions implicilty, without asking you, writing them into code.
-**Business rules** expose implemented decisions for better underestanding and for further change.
+**Application code** is written by an agent. Along the way it makes decisions implicitly, without asking you, and buries them in code.
+**Business rules** bring those decisions out into a file you can read, understand and change.
 
 <p align="center">
   <img src="docs/images/rules-define-code.png" width="880"
@@ -35,8 +36,9 @@ We selected YAML because it is readable and compact (no curly braces, no types).
 
 - Expression language - to set variables dynamically in flexible way
 - Vars as `$vars` key - to declare set of required variables
-- Schema `$schema` (inline) or usef in multiple files via `$dsl`
+- Schema `$schema` (inline) or used in multiple files via `$dsl`
 - Functions obtained from application or declared internally
+- Built-in text functions: `slug`, `trim`, `lowercase`, `uppercase`, `capitalize`, `snakecase`, `kebabcase`, `camelcase`, `pascalcase`, `titlecase`
 
 ## Brief
 
@@ -101,7 +103,7 @@ export function NavBar({ plan }) {
 }
 ```
 
-Now you are in full control of menu bar. You know which plans explose which menu items.
+Now you are in full control of the menu bar: you can see which plans expose which menu items.
 
 Add access to team dashboard for users of Pro plan with no code change:
 
@@ -148,14 +150,11 @@ Node 22+ or Bun. Importing `.ts` files requires Bun or Node 22.18+.
 **Load only trusted files:** loading runs `$import` modules and marker handlers.
 Validation runs neither and evaluates no formulas.
 
-## Editing rules in a UI
+### When not to use it
 
-Bundle a rule editor into your current UI with the `scripted-yaml-ui` [skill](#skills).
-
-<p align="center">
-  <img src="docs/images/editor-ui.png" width="880"
-       alt="An editor built with the skill: rule files as cards with a dimmed YAML preview on the left, and shop.yml open in a sidebar on the right, with its discount codes as collapsible blocks, text and number inputs, and highlighted formulas">
-</p>
+- **Complex logic.** Formulas are for rules a person reads and changes: thresholds, conditions, visibility, prices. Algorithms, I/O and anything that needs loops or async code belong in the application.
+- **Untrusted input.** A file can import modules and call marker handlers, so do not load files written by users of your application.
+- **Static config.** If nothing in the file is computed, plain YAML is simpler.
 
 ## Examples
 
@@ -735,7 +734,7 @@ bun run build       # dist/index.js, dist/cli.js and the type declarations
 | `key!name:` | the value is handed to the application's function `name` |
 | `$keyword:` | inputs, conditions, repetition, schemas, imports, and embedded tests |
 
-Formulas use FEEL, not JavaScript. [Expression examples](docs/examples) · [Full syntax](SPEC.md).
+Formulas use FEEL, not JavaScript. [Expression examples](docs/examples) · [Built-in functions](docs/functions.md) · [Full syntax](SPEC.md).
 
 ## Skills
 
