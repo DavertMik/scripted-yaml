@@ -24,7 +24,7 @@ wording that depends on a condition.
 |---|---|
 | conditions, thresholds, rates, limits | reading and writing (database, network, files) |
 | magic values and constants written into the code | anything async, timers, retries |
-| lookup tables, lists of options, formats supported | loops that keep state, algorithms, parsing |
+| lookup tables, lists of options, formats supported | loops that keep state, algorithms, parsing, text shaping |
 | which items show, which are allowed | error handling, logging, types |
 | texts the user sees, and text that depends on the data | ids, keys and wiring only the code needs |
 
@@ -72,8 +72,14 @@ In this order, each only as far as the code needs:
 A state machine, a menu or a form starts from a template of the package (`scripted-yaml templates`),
 not from an empty file.
 
-Leave out: a key nobody reads, a function called once, `$import` of a helper a formula can express,
-comments that repeat the key name.
+Leave out: a key nobody reads, a function called once, `$import` of a helper a formula can express
+(text shaping excepted, see below), comments that repeat the key name.
+
+**Text transformations stay in JS.** A slug, a case change, a regular expression that cleans a
+value: none is a business rule, and its owner never edits it. Use a built-in (`slug`, `trim`,
+`lowercase`, `uppercase`, `capitalize`, `snakecase`, `kebabcase`, `camelcase`, `pascalcase`, `titlecase`); for anything else declare
+the function under `$functions` without `!` and pass it from the code, or pass the finished value
+as a variable. Never a `$functions` formula made of nested `replace(…)`.
 
 ## 5. One rule, one file, kept short
 

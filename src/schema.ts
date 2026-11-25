@@ -40,8 +40,10 @@ export class Rule {
 
   /** True when the rule holds for these values of the fields. */
   holds(fields: Record<string, unknown>): boolean {
+    const context = { ...fields };
+    for (const formula of this.formula.formulas) for (const ref of formula.refs) if (ref.call) Builtins.provide(context, ref.head);
     try {
-      return evaluate(this.formula.source, fields).value === true;
+      return evaluate(this.formula.source, context).value === true;
     } catch {
       return false;
     }
@@ -86,6 +88,7 @@ export class Shape {
       for (const ref of formula.refs) {
         const known = ref.inFilter || this.fields.has(ref.head) || (ref.call && Builtins.has(ref.head));
         if (!known) problems.error(at, `a rule of ${label} reads "${ref.head}", which is not one of its fields`);
+        if (ref.call && Builtins.has(ref.head) && this.fields.has(ref.head)) problems.error(at, `a rule of ${label}: ${Builtins.clash(ref.head)}`);
       }
     }
     this.rules.push(rule);

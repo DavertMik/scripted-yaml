@@ -37,6 +37,7 @@ We selected YAML because it is readable and compact (no curly braces, no types).
 - Vars as `$vars` key - to declare set of required variables
 - Schema `$schema` (inline) or usef in multiple files via `$dsl`
 - Functions obtained from application or declared internally
+- Built-in text functions: `slug`, `trim`, `lowercase`, `uppercase`, `capitalize`, `snakecase`, `kebabcase`, `camelcase`, `pascalcase`, `titlecase`
 
 ## Brief
 
@@ -730,7 +731,7 @@ bun run build       # dist/index.js, dist/cli.js and the type declarations
 | `key!name:` | the value is handed to the application's function `name` |
 | `$keyword:` | inputs, conditions, repetition, schemas, imports, and embedded tests |
 
-Formulas use FEEL, not JavaScript. [Expression examples](docs/examples) · [Full syntax](SPEC.md).
+Formulas use FEEL, not JavaScript. [Expression examples](docs/examples) · [Built-in functions](docs/functions.md) · [Full syntax](SPEC.md).
 
 ## Skills
 

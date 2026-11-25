@@ -45,6 +45,8 @@
     "prepublishOnly": "bun run build && bun run typecheck && bun test"
   },
   "dependencies": {
+    "@sindresorhus/slugify": "^4.0.1",
+    "change-case": "^5.4.4",
     "feelers": "^3.2.0",
     "feelin": "^8.2.2",
     "mdq-cli": "^0.1.4",

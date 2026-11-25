@@ -2,7 +2,7 @@
 # Host functions available to the examples (written in TypeScript by the application, not part of FEEL):
 #   fileExists(path)      true for "coverage.tests.yml" only
 #   glob(path, pattern)   true when the path matches the glob pattern
-#   capitalize(text)      "checkout" -> "Checkout"
+#   ownerOf(service)      the team that owns a service: "checkout" -> "payments"
 #   truncate(text, n)     cuts to n characters and adds "…"
 
 vars:

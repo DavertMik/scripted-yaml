@@ -71,7 +71,8 @@ for item in list return item.price * 2      a loop gives one result per item
 some item in list satisfies item.price > 5  yes or no over a list (also: every)
 ```
 
-Text functions: `starts with(a, b)`, `upper case(a)`, `string join(list, ", ")`, `string(number)`.
+Text functions: `starts with(a, b)`, `string join(list, ", ")`, `string(number)`, `trim(a)`, `lowercase(a)`,
+`uppercase(a)`, `capitalize(a)`, `slug(a)`, `snakecase(a)`, `kebabcase(a)`, `camelcase(a)`, `pascalcase(a)`, `titlecase(a)`.
 
 ## Mistakes
 
@@ -167,9 +168,11 @@ $tests:
   - { about: A new customer with an empty cart, vars: { customer: { orders: [], tags: [] }, cart: { subtotal: 0, items: [] } }, expect: { discount: 0, shipping.name: [Standard, Economy], checkout.note: '' } }
 ```
 
-- **`$functions`**: `name(parameters)!: formula`. Not the name of a FEEL built-in or of a key.
+- **`$functions`**: `name(parameters)!: formula`. Not the name of a built-in or of a key.
   Without the `!`, the key declares a function the application passes, as `$vars` declares a
   variable: `fileCount(mask):` with an `about:` map under it, or nothing. It needs no `$import`.
+- **Text shaping is not a rule**: no `replace(…)` chains and no `$functions` formula for it. Call a
+  built-in (`slug(title)`); for any other, declare the function without `!` and pass it from JS.
 - **`$if!` / `$unless!`** keep or drop the list item or map they sit in. They must give true or false.
 - **`$each!`** repeats a list item per value, named by `$as`; `$if!` beside it is checked per value.
 - **`$when`** changes keys of its map: every matching case applies, in order; `$else` when none did.
@@ -181,20 +184,21 @@ $tests:
 
 ```yaml
 $import:
-  ./helpers.js: [slug]          # names the module exports
+  ./helpers.js: [vatRate]       # names the module exports
   ./settings.yml: settings      # one name for the whole file
   ./handbook.md: handbook       # a function: selector in, Markdown out
 
 title: Summer Sale
 path!: '"/pages/" + slug(title)'
+vat!: vatRate("DE")
 free_from: Free shipping from {{ settings.free_shipping_from }} {{ settings.currency }}
 releases!: handbook("section(/^Releases/) paragraph")
 ```
 
-`scripted-yaml parse import.yml` gives `path` as `"/pages/summer-sale"`, `free_from` as
+`scripted-yaml parse import.yml` gives `path` as `"/pages/summer-sale"` (`slug` is built in), `vat` as `0.19`, `free_from` as
 `"Free shipping from 50 EUR"` and `releases` as `"We release on Tuesdays.\n"`.
 
-A formula calls only FEEL built-ins, `$functions` (defined or declared) and imported names. Imported functions are
+A formula calls only built-ins, `$functions` (defined or declared) and imported names. Imported functions are
 synchronous. Paths are relative to the file. In an `mdq` selector inside a formula, match text
 with a regular expression (`section(/^Releases/)`): double quotes would end the FEEL text.
 

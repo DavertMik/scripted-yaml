@@ -1,4 +1,5 @@
 import { evaluate } from 'feelin';
+import { Builtins } from './builtins.js';
 import type { Document } from './document.js';
 import { Formula, Text } from './expression.js';
 import type { LazyFormula } from './lazy-formula.js';
@@ -289,6 +290,8 @@ export class Resolution {
         const bag = (context.vars ??= {}) as Record<string, unknown>;
         if (ref.path[0] === undefined) Object.assign(bag, this.vars);
         else bag[ref.path[0]] = this.vars[ref.path[0]] ?? null;
+      } else if (target.kind === 'builtin') {
+        Builtins.provide(context, ref.head);
       } else if (target.kind === 'each') {
         context[ref.head] = env.given(target.owner);
       } else if (target.kind === 'given') {
