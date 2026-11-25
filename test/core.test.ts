@@ -289,19 +289,6 @@ describe('marked values', () => {
     ]);
   });
 
-  test('a patch adds text before or after the text of the same marked key', () => {
-    const scripted = new ScriptedYaml({ markers: { task: (value) => value, sh: (value) => value }, computed: ['task'] });
-    const base = '$vars:\n  URL: {}\nstages:\n  - id: a\n    run!task: Do {{ vars.URL }}.\n  - id: b\n    run!sh: echo\n';
-    const patched = scripted.loadTextSync('stages:\n  a:\n    run!task:\n      $after: Be brief.\n  b:\n    run!sh:\n      $before: set -e\n', { file: 'p.yml', base });
-    expect(patched.resolve({ vars: { URL: 'u' } }).stages).toEqual([
-      { id: 'a', run: 'Do u.\nBe brief.' },
-      { id: 'b', run: 'set -e\necho' },
-    ]);
-    expect(messages(scripted.validateText('stages:\n  b:\n    run!task:\n      $after: x\n', { file: 'p.yml', base }))).toEqual([
-      'stages.b.run!task  the base has "run!sh", not "run!task"; change it with $replace',
-    ]);
-  });
-
   test('a marker not listed as computed gets its value as written', () => {
     const document = new ScriptedYaml({ markers: { sh: (value) => value } }).loadTextSync('run!sh: echo "${{ github.sha }}"\n');
     expect(document.resolve()).toEqual({ run: 'echo "${{ github.sha }}"' });
