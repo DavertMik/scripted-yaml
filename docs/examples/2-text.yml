@@ -6,9 +6,9 @@ examples:
   - about: Joining text. Starts with a quote, so the whole formula is in single quotes.
     feel: '"Test " + vars.service'
     result: Test checkout
-  - about: A host function in the middle. capitalize is plugged in by the application.
-    feel: '"Test " + capitalize(vars.service)'
-    result: Test Checkout
+  - about: A host function in the middle. ownerOf is plugged in by the application.
+    feel: '"Owner: " + ownerOf(vars.service)'
+    result: "Owner: payments"
   - about: A number must be turned into text before joining.
     feel: '"Total: " + string(cart.subtotal)'
     result: "Total: 103"

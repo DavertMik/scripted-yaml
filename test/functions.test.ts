@@ -137,3 +137,80 @@ crowded!: many("*.ts")
     expect(again.resolve()).toEqual({ specs: 3, crowded: true });
   });
 });
+
+describe('built-in text functions', () => {
+  test('each one, called from a formula and from {{ }}', async () => {
+    const result = await resolve(`
+title: "  Summer Sale: 50% off!  "
+name: order line_items
+trimmed!: trim(title)
+slug!: slug(title)
+snake!: snakecase(name)
+kebab!: kebabcase(name)
+camel!: camelcase(name)
+pascal!: pascalcase(name)
+titled!: titlecase(name)
+capital!: capitalize(name)
+lower!: lowercase("Order ID")
+upper!: uppercase(name)
+path: /pages/{{ slug(title) }}
+`);
+    expect(result).toMatchObject({
+      trimmed: 'Summer Sale: 50% off!',
+      slug: 'summer-sale-50-off',
+      snake: 'order_line_items',
+      kebab: 'order-line-items',
+      camel: 'orderLineItems',
+      pascal: 'OrderLineItems',
+      titled: 'Order Line Items',
+      capital: 'Order line_items',
+      lower: 'order id',
+      upper: 'ORDER LINE_ITEMS',
+      path: '/pages/summer-sale-50-off',
+    });
+  });
+
+  test('slug keeps a path readable: an issue URL becomes a branch name', async () => {
+    const document = await scripted.loadText('$vars:\n  ISSUE_URL: {}\nbranch!: slug(replace(vars.ISSUE_URL, "^[a-z]+://[^/]*|[?#].*$", ""))\n', { file: 'x.yml' });
+    expect(document.resolve({ vars: { ISSUE_URL: 'https://github.com/org/Repo/issues/42?x=1' } })).toEqual({ branch: 'org-repo-issues-42' });
+  });
+
+  test('anything that is not text gives null, as FEEL built-ins do', async () => {
+    expect(await resolve('a!: slug(null)\nb!: snakecase(5)\nc!: trim(null) = null\n')).toEqual({ a: null, b: null, c: true });
+  });
+
+  test('a key may have the name of one; the call is still the function', async () => {
+    expect(await resolve('title: Summer Sale\nslug!: slug(title)\ncopy!: slug\n')).toEqual({ title: 'Summer Sale', slug: 'summer-sale', copy: 'summer-sale' });
+  });
+
+  test('one formula may not read a key and call the built-in of its name', async () => {
+    const [problem] = await scripted.validateText('title: Summer Sale\nslug: summer-sale\nok!: slug = slug(title)\n', { file: 'x.yml' });
+    expect(problem!.message).toBe('"slug" is read as a key and called as a built-in function in one formula; put the call in a key of its own');
+    const rule = '$schema:\n  required: [pages*:Page]\n  Page:\n    required: [slug, title]\n    rules:\n      - valid!: slug = slug(title)\n        message: bad slug\npages:\n  - slug: summer-sale\n    title: Summer Sale\n';
+    expect((await scripted.validateText(rule, { file: 'x.yml' }))[0]!.message).toContain('put the call in a key of its own');
+  });
+
+  test('$functions and $import may not take the name of one', async () => {
+    const [problem] = await scripted.validateText('$functions:\n  slug(text)!: lower case(text)\nx!: slug("A")\n', { file: 'x.yml' });
+    expect(problem!.message).toBe('the function "slug" has the name of a built-in function; remove it and call slug(text), which is built in, or give it another name');
+    const [spaced] = await scripted.validateText('$functions:\n  snakecase(text):\nx!: snakecase("A")\n', { file: 'x.yml' });
+    expect(spaced!.message).toContain('built-in');
+  });
+
+  test('a rule of a $schema may call one', async () => {
+    const text = (id: string) => `
+$schema:
+  required: [pages*:Page]
+  Page:
+    required: [id, title]
+    rules:
+      - valid!: id = slug(title)
+        message: the id must be the slug of the title
+pages:
+  - id: ${id}
+    title: Summer Sale
+`;
+    expect(await scripted.validateText(text('summer-sale'), { file: 'x.yml' })).toEqual([]);
+    expect((await scripted.validateText(text('summer'), { file: 'x.yml' })).map((problem) => problem.message)).toEqual(['the id must be the slug of the title']);
+  });
+});

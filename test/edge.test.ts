@@ -680,7 +680,7 @@ describe('what the library relies on in feelin', () => {
     const { parse } = await import('yaml');
     const { Builtins } = await import('../src/builtins');
     const { LazyFormula } = await import('../src/lazy-formula');
-    const host = ['fileExists', 'capitalize', 'truncate', 'glob'];
+    const host = ['fileExists', 'ownerOf', 'truncate', 'glob'];
     const folder = join(import.meta.dir, '../docs/examples');
     const called = new Set<string>();
     for (const file of readdirSync(folder).filter((name) => name.endsWith('.yml') && name !== 'data.yml')) {

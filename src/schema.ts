@@ -44,9 +44,11 @@ export class Rule {
    * when the rule itself cannot be computed, so a broken rule is not mistaken for a failed one.
    */
   failure(fields: Record<string, unknown>): string | undefined {
+    const context = { ...fields };
+    for (const formula of this.formula.formulas) for (const ref of formula.refs) if (ref.call) Builtins.provide(context, ref.head);
     let result: ReturnType<typeof evaluate>;
     try {
-      result = evaluate(this.formula.source, fields);
+      result = evaluate(this.formula.source, context);
     } catch (error) {
       return this.broken((error as Error).message);
     }
@@ -98,6 +100,7 @@ export class Shape {
       for (const ref of formula.refs) {
         const known = ref.inFilter || this.fields.has(ref.head) || (ref.call && Builtins.has(ref.head));
         if (!known) problems.error(at, `a rule of ${label} reads "${ref.head}", which is not one of its fields`);
+        if (ref.call && Builtins.has(ref.head) && this.fields.has(ref.head)) problems.error(at, `a rule of ${label}: ${Builtins.clash(ref.head)}`);
       }
     }
     this.rules.push(rule);

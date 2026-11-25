@@ -189,7 +189,7 @@ in return some every satisfies and or not between instance of`, strings in `"`, 
 closely enough. Shell markers use the shell mode, YAML mode the YAML language.
 
 - *(later)* Autocomplete names a formula can read: `vars.*` from `$vars`, sibling and top-level keys, list
-  items by `id`, `$functions`, imported names, and FEEL built-ins.
+  items by `id`, `$functions`, imported names, and built-ins.
 - Show the problem from `validateText` under the input ("unknown name "prise"; did you mean
   "price"?").
 - *(later)* A "preview" that computes the file with sample variables (`load` then `resolve`) and
