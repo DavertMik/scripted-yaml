@@ -12,6 +12,12 @@ export interface ScriptedYamlOptions {
    */
   markers?: Record<string, Marker> | string[];
   /**
+   * Markers whose value is data like any other: `{{ }}` and `key!:` in it are checked, and the names
+   * they read count. `load` gives the function the value as `data` has it (a template is a `Text`);
+   * `resolve` calls it again with the computed value, and puts what it returns in the result.
+   */
+  computed?: string[];
+  /**
    * Where the files that `$extends`, `$dsl` and `$import` name come from, and the file `validate` and
    * `load` open. `scripted-yaml` reads the disk (`DiskFiles`); `scripted-yaml/core` reads nothing
    * unless it is given files, such as `MemoryFiles`.
@@ -43,12 +49,14 @@ interface Opened {
  */
 export class ScriptedYaml {
   private readonly markers: Record<string, Marker | undefined> = {};
+  private readonly computed: Set<string>;
   private readonly files: Files;
   private readonly strict: boolean;
 
   constructor(options: ScriptedYamlOptions = {}) {
     if (Array.isArray(options.markers)) for (const name of options.markers) this.markers[name] = undefined;
     else Object.assign(this.markers, options.markers);
+    this.computed = new Set(options.computed ?? []);
     this.files = options.files ?? new MemoryFiles();
     this.strict = options.strict ?? false;
   }
@@ -97,7 +105,7 @@ export class ScriptedYaml {
     const problems = new Problems();
     const base = options.base === undefined ? undefined : { file: `${file} (base)`, text: options.base };
     const source = new SourceLoader(problems, this.files).load(input, file, base);
-    if (source) new Checker(source, Object.keys(this.markers), problems).run();
+    if (source) new Checker(source, Object.keys(this.markers), problems, this.computed).run();
     if (this.strict) problems.strict();
     problems.sort();
     return { source, problems };
@@ -159,7 +167,7 @@ export class ScriptedYaml {
         failed(spec, error);
       }
     }
-    const document = new Document(file, source, imports, this.markers, problems);
+    const document = new Document(file, source, imports, { functions: this.markers, computed: this.computed }, problems);
     const settle = (): void => {
       for (const child of children) {
         try {

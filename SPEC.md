@@ -680,6 +680,29 @@ mdq: (selector) => markdown.query(selector).text()
 The library never changes what a marker function returned, also when it is a
 string: a `{{ }}` inside it is not a formula and is left as written.
 
+**A computed marker.** An application lists a marker under `computed` when
+what is written under it is text or data like any other, and only the way it
+is used is the application's: an agent's task, a question.
+
+```ts
+new ScriptedYaml({
+  markers: { task: (text) => new Task(text) },
+  computed: ['task'],
+});
+```
+
+```yaml
+- id: plan
+  run!task: Write a test plan for {{ vars.URL }}
+```
+
+- `validate` checks its value as any value: a `{{ }}` that does not close, or a name that is not declared, is a problem, and the names it reads count.
+- `load` calls the function with the value as `document.data` has it: `Text` for text with `{{ }}`, a `Formula` for a `key!:` inside it.
+- `resolve` calls the function again, with the value computed, and puts what it returns in the result: `new Task("Write a test plan for https://staging")`. A value the application set on the marked key is not read.
+
+Without `computed`, a marker gets its value as written, `{{ }}` and all: a
+shell command may hold `${{ github.sha }}`.
+
 ### 7.4 Computing: all variables in, all values out
 
 There is one call. The application passes every variable the file needs and
@@ -696,7 +719,7 @@ result.stages[0].task;        // the text, with every {{ }} filled in
 - **All declared functions.** `functions` holds, by name, each function the file declares under `$functions` without a formula: `document.resolve({ vars, functions: { fileCount } })`. One that is missing, not a function, or async is an error before anything is computed. `document.functions` lists them, with their parameters and `about`. `document.test({ functions })` passes them to every test, and an imported scripted-yaml file gets them too.
 - **All values.** Every `key!` holds its value, every `{{ }}` is filled in, and `$if` / `$unless` / `$each` / `$when` are applied. The result contains no formulas.
 - **One pass, by reference.** Formulas are computed in the order they refer to each other (3.5), each once.
-- **Marked keys are unchanged unless a formula read them.** What a marker function returned at load is in the result as it is: a `ShellCommand` stays a `ShellCommand`. One that a formula read holds the value that was read (see below).
+- **Marked keys are unchanged unless a formula read them.** What a marker function returned at load is in the result as it is: a `ShellCommand` stays a `ShellCommand`. One that a formula read holds the value that was read (see below). A computed marker holds what its function returned for the computed value (7.3).
 - **Keywords are not data.** `$vars`, `$functions`, `$import`, `$schema`, `$dsl`, `$extends` and `$tests` are in neither `document.data` nor the result. `$value` is the one `$` key that stays.
 
 There is no call that computes a single key.
@@ -722,9 +745,26 @@ stages:
 ```
 
 When a formula reads a value a marker function returned, the library gives a
-boolean as it is; for anything else it calls the value's `toString()` and gives
-the formula the text. Two texts have a meaning of their own: `"1"` is true and
-`"0"` is false. Any other text stays text.
+boolean as it is, and a list or a map of plain data (an array, or an object made
+as `{ }` is) as data, so a formula reads its fields. For anything else it calls
+the value's `toString()` and gives the formula the text. Two texts have a
+meaning of their own: `"1"` is true and `"0"` is false. Any other text stays
+text.
+
+```yaml
+prerequisites:
+  git:
+    $value!extract: { sha: the commit under test }
+
+stages:
+  - id: report
+    when!: prerequisites.git != null
+    run!task: Report on {{ prerequisites.git.sha }}
+```
+
+The application finds the values and sets `{ sha: "4f2a…" }` on the marked
+key; it leaves `null` when it found none, so `prerequisites.git.sha` is null
+then and `prerequisites.git != null` is false.
 
 The application may also give a marked key its value after loading, such as
 when it ran the checks itself, with a promise: `document.marked` lists every

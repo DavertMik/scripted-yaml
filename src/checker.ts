@@ -43,6 +43,8 @@ export class Checker {
     private readonly source: Source,
     private readonly markers: string[],
     private readonly problems: Problems,
+    /** Markers whose value is checked like any value. */
+    private readonly computedMarkers: ReadonlySet<string> = new Set(),
   ) {
     this.scope = new Scope(source);
   }
@@ -94,6 +96,7 @@ export class Checker {
     if (entry.base) this.checkEntry(entry.base);
     if (entry.key.kind === 'marked') {
       if (!this.markers.includes(entry.key.marker!)) this.problems.error(entry, `no function is registered for the marker "${entry.key.marker}"`);
+      if (this.computedMarkers.has(entry.key.marker!)) this.checkValue(entry.value, entry);
     } else if (entry.key.kind === 'formula') {
       this.formula(entry);
     } else {

@@ -13,6 +13,12 @@ import type { Variable } from './variables.js';
 // biome-ignore lint/suspicious/noExplicitAny: the value is whatever YAML held under the key
 export type Marker = (source: any) => unknown;
 
+/** The application's markers: a function per name, and the names whose value is computed like any value. */
+export interface Markers {
+  functions: Record<string, Marker | undefined>;
+  computed: ReadonlySet<string>;
+}
+
 /** What `resolve` is given: the variables, and the functions the file declares for the application to pass. */
 export interface ResolveOptions {
   vars?: Record<string, unknown>;
@@ -54,7 +60,11 @@ export class Marked {
     return this.entry.value.toData();
   }
 
-  /** What a formula and the result get. A formula reads a boolean as it is; anything else by its `toString()`, with "1" as true and "0" as false. */
+  /**
+   * What a formula and the result get. A formula reads a boolean, a map or a list of plain data as it is;
+   * anything else by its `toString()`, with "1" as true and "0" as false. `resolve` calls a computed
+   * marker's function again, with the computed value, and does not read a value set here.
+   */
   get value(): unknown {
     return this.entry.marked?.value;
   }
@@ -68,7 +78,8 @@ export class Marked {
 export class Document {
   /**
    * The file as data, markers removed from the key names. A `key!:` is a `Formula`, text with `{{ }}`
-   * is a `Text`, a `key!name:` is what the marker function returned.
+   * is a `Text`, a `key!name:` is what the marker function returned: given the value as written, or,
+   * for a computed marker, as this data has it.
    */
   // biome-ignore lint/suspicious/noExplicitAny: the shape is the file's own
   readonly data: any;
@@ -79,7 +90,7 @@ export class Document {
     readonly file: string,
     private readonly source: Source,
     private readonly imports: Map<string, Imported>,
-    markers: Record<string, Marker | undefined>,
+    private readonly markers: Markers,
     problems: Problems,
   ) {
     const scope = new Scope(source);
@@ -89,10 +100,10 @@ export class Document {
       if (!(node instanceof MapNode)) return node.toData();
       const data: Record<string, unknown> = {};
       for (const entry of node === source.root ? source.data : node.entries) {
-        data[entry.name] = entry.key.kind === 'marked' ? this.mark(entry, markers, problems) : build(entry.value);
+        data[entry.name] = entry.key.kind === 'marked' ? this.mark(entry, build, problems) : build(entry.value);
         // A replaced entry is not data, but where a formula reads it as `base`, its markers are called too.
         for (let holder = entry; holder.base && MergedForm.readsBase(scope, holder); holder = holder.base) {
-          if (holder.base.key.kind === 'marked') this.mark(holder.base, markers, problems);
+          if (holder.base.key.kind === 'marked') this.mark(holder.base, build, problems);
           else build(holder.base.value);
         }
       }
@@ -117,7 +128,7 @@ export class Document {
    */
   // biome-ignore lint/suspicious/noExplicitAny: the shape is the file's own
   resolve(options: ResolveOptions = {}): any {
-    return new Resolution(this.source, this.imports, options.vars ?? {}, options.functions).run();
+    return new Resolution(this.source, this.imports, options.vars ?? {}, options.functions, this.markers).run();
   }
 
   /**
@@ -141,7 +152,7 @@ export class Document {
       const { about, vars, expect } = (test ?? {}) as { about?: string; vars?: Record<string, unknown>; expect?: Record<string, unknown> };
       const failures: string[] = [];
       try {
-        const resolution = new Resolution(this.source, this.imports, vars ?? {}, options.functions);
+        const resolution = new Resolution(this.source, this.imports, vars ?? {}, options.functions, this.markers);
         resolution.run();
         for (const [path, expected] of Object.entries(expect ?? {})) {
           const actual = resolution.probe(path);
@@ -161,17 +172,17 @@ export class Document {
 
   /** The file as a formula of another file reads it, when it is imported with `$import`. */
   view(vars: Record<string, unknown>, functions: Record<string, unknown> = {}): unknown {
-    return new Resolution(this.source, this.imports, vars, functions).view();
+    return new Resolution(this.source, this.imports, vars, functions, this.markers).view();
   }
 
-  private mark(entry: Entry, markers: Record<string, Marker | undefined>, problems: Problems): unknown {
-    const marker = markers[entry.key.marker!];
+  private mark(entry: Entry, build: (node: Node) => unknown, problems: Problems): unknown {
+    const marker = this.markers.functions[entry.key.marker!];
     if (!marker) {
       problems.error(entry, `the marker "${entry.key.marker}" was registered by name only; loading a file needs its function`);
       return undefined;
     }
     try {
-      const value = marker(entry.value.toData());
+      const value = marker(this.markers.computed.has(entry.key.marker!) ? build(entry.value) : entry.value.toData());
       entry.marked = { value };
       this.marked.push(new Marked(entry));
       return value;

@@ -27,6 +27,8 @@ class MarkedValue {
 class Arguments {
   readonly files: string[];
   readonly markers: string[];
+  /** Markers whose value is checked and computed like any value: `--computed task`. They are markers too. */
+  readonly computed: string[];
   readonly install: boolean;
   private readonly pairs: string[];
   private readonly varsFile: string | undefined;
@@ -39,7 +41,8 @@ class Arguments {
       throw new UsageError((error as Error).message);
     }
     this.files = parsed.positionals;
-    this.markers = (parsed.values.markers ?? '').split(',').filter((name) => name !== '');
+    this.computed = (parsed.values.computed ?? '').split(',').filter((name) => name !== '');
+    this.markers = [...new Set([...(parsed.values.markers ?? '').split(',').filter((name) => name !== ''), ...this.computed])];
     this.install = parsed.values.install ?? false;
     this.pairs = parsed.values.var ?? [];
     this.varsFile = parsed.values.vars;
@@ -71,6 +74,7 @@ class Arguments {
         var: { type: 'string', multiple: true },
         vars: { type: 'string' },
         markers: { type: 'string' },
+        computed: { type: 'string' },
         install: { type: 'boolean' },
       },
     });
@@ -103,11 +107,11 @@ abstract class Command {
 }
 
 class ValidateCommand extends Command {
-  readonly usage = 'scripted-yaml validate <file>... [--markers sh,mdq]';
+  readonly usage = 'scripted-yaml validate <file>... [--markers sh,mdq] [--computed task]';
 
   async run(args: Arguments): Promise<number> {
     if (args.files.length === 0) throw new UsageError('validate needs at least one file');
-    const scripted = new ScriptedYaml({ markers: args.markers });
+    const scripted = new ScriptedYaml({ markers: args.markers, computed: args.computed });
     let failed = false;
     for (const file of args.files) {
       let lines: string[];
@@ -126,14 +130,14 @@ class ValidateCommand extends Command {
 }
 
 class ParseCommand extends Command {
-  readonly usage = 'scripted-yaml parse <file> [--var NAME=value]... [--vars file.json] [--markers sh,mdq]';
+  readonly usage = 'scripted-yaml parse <file> [--var NAME=value]... [--vars file.json] [--markers sh,mdq] [--computed task]';
 
   async run(args: Arguments): Promise<number> {
     const [file, ...more] = args.files;
     if (file === undefined || more.length > 0) throw new UsageError('parse takes one file');
     const vars = args.vars;
     try {
-      const document = await new ScriptedYaml({ markers: this.placeholders(args.markers) }).loadText(this.read(file), { file });
+      const document = await new ScriptedYaml({ markers: this.placeholders(args.markers), computed: args.computed }).loadText(this.read(file), { file });
       console.log(JSON.stringify(document.resolve({ vars }), null, 2));
       return 0;
     } catch (error) {
@@ -145,11 +149,11 @@ class ParseCommand extends Command {
 }
 
 class TestCommand extends Command {
-  readonly usage = 'scripted-yaml test <file>... [--markers sh,mdq]';
+  readonly usage = 'scripted-yaml test <file>... [--markers sh,mdq] [--computed task]';
 
   async run(args: Arguments): Promise<number> {
     if (args.files.length === 0) throw new UsageError('test needs at least one file');
-    const scripted = new ScriptedYaml({ markers: this.placeholders(args.markers) });
+    const scripted = new ScriptedYaml({ markers: this.placeholders(args.markers), computed: args.computed });
     let failed = false;
     for (const file of args.files) {
       const lines: string[] = [];
@@ -231,6 +235,7 @@ class Cli {
       '  --version  prints the name and version; every command prints them first, on stderr',
       '  --markers  the marker names the files use (run!sh: is the marker "sh")',
       '             parse shows a marked value as { "marker": "sh", "source": "…" }',
+      '  --computed markers whose value is checked and computed like any value: {{ }} in run!task:',
       '  --var      one variable, as text; --vars reads variables from a JSON file',
     ].join('\n');
   }

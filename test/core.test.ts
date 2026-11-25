@@ -267,6 +267,33 @@ describe('marked values', () => {
     expect(document.resolve().go).toBe(false);
   });
 
+  test('a formula reads a marked map or list as data, and a field of it', () => {
+    const document = new ScriptedYaml({ markers: { extract: () => null } }).loadTextSync('git:\n  $value!extract: { sha: the commit }\nsha!: git.sha\nfound!: git != null\n');
+    expect(document.resolve()).toMatchObject({ sha: null, found: false });
+    document.marked[0]!.value = { sha: 'abc' };
+    expect(document.resolve()).toMatchObject({ git: { $value: { sha: 'abc' } }, sha: 'abc', found: true });
+  });
+
+  test('a computed marker has its {{ }} checked, and resolve calls its function with the text filled in', () => {
+    class Task {
+      constructor(readonly text: unknown) {}
+    }
+    const scripted = new ScriptedYaml({ markers: { task: (value) => new Task(value) }, computed: ['task'] });
+    const text = '$vars:\n  URL: {}\nplan:\n  run!task: Test {{ vars.URL }}\n';
+    const document = scripted.loadTextSync(text);
+    const loaded = document.data.plan.run as Task;
+    expect(loaded.text).toMatchObject({ source: 'Test {{ vars.URL }}', reads: ['vars.URL'] });
+    expect(document.resolve({ vars: { URL: 'https://x' } }).plan.run).toEqual(new Task('Test https://x'));
+    expect(messages(scripted.validateText('$vars:\n  URL: {}\nplan:\n  run!task: Test {{ vars.URLL }}\n'))).toEqual([
+      'plan.run!task  the variable "URLL" is not declared in $vars; it is null unless the application passes it',
+    ]);
+  });
+
+  test('a marker not listed as computed gets its value as written', () => {
+    const document = new ScriptedYaml({ markers: { sh: (value) => value } }).loadTextSync('run!sh: echo "${{ github.sha }}"\n');
+    expect(document.resolve()).toEqual({ run: 'echo "${{ github.sha }}"' });
+  });
+
   test('a resolve that fails still throws ResolveFailed', () => {
     const document = new ScriptedYaml().loadTextSync('$vars:\n  N: {}\nx!: vars.N\n');
     expect(catching(() => document.resolve())).toBeInstanceOf(ResolveFailed);
