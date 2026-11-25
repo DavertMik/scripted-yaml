@@ -232,7 +232,10 @@ export class Resolution {
       const entry = entries.find((candidate) => candidate.name === name);
       context[name] = !entry ? null : entry.key.kind === 'marked' ? entry.value.toData() : this.entryView(entry, env);
     }
-    for (const rule of map.shape.rules) if (!rule.holds(context)) this.broken.push(this.problem(map, rule.message));
+    for (const rule of map.shape.rules) {
+      const failure = rule.failure(context);
+      if (failure) this.broken.push(this.problem(map, failure));
+    }
   }
 
   // ── formulas ──
