@@ -456,7 +456,7 @@ stages:
 | `$replace` | in an item | overwrites the fields listed; each must exist |
 | `$before` / `$after` | in a collection (`stages`) | new items at the start / end |
 | `$before` / `$after` | in one item | new items directly in front of / behind it |
-| `$before` / `$after` | in a text or list field | text or values added at the start / end |
+| `$before` / `$after` | in a text or list field, or text under a marked key named with its marker (`run!task:`) | text or values added at the start / end |
 | `$add` | in a collection without order (`prerequisites`) | new entries; none may exist yet |
 | `$remove` | in a collection | drops the named entries; each must exist |
 | `base` | in a formula | the inherited value, like `super` |
@@ -702,6 +702,9 @@ new ScriptedYaml({
 
 Without `computed`, a marker gets its value as written, `{{ }}` and all: a
 shell command may hold `${{ github.sha }}`.
+
+A patch adds text to the text under a marked key as it does to plain text, when
+it names the key with the same marker: `run!task: { $after: Be brief. }`.
 
 ### 7.4 Computing: all variables in, all values out
 

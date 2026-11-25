@@ -86,11 +86,22 @@ export class Patch {
     if (entry.key.keyword) return this.problems.error(entry, `"${entry.key.raw}" cannot be used in a patch here`);
     const child = this.child(target, entry.name);
     if (!child) return this.problems.error(entry, `"${entry.name}" matches nothing in the base; a patch adds with $add, $before or $after`);
+    // Text under a marker, such as an agent's task, takes $before and $after like plain text.
+    if (Patch.addsText(entry)) {
+      if (child.entry?.key.raw === entry.key.raw) return this.change(entry.value as MapNode, child);
+      return this.problems.error(entry, `the base has "${child.entry?.key.raw ?? entry.name}", not "${entry.key.raw}"; change it with $replace`);
+    }
     if (entry.key.kind !== 'plain' || !(entry.value instanceof MapNode)) {
       return this.problems.error(entry, `a plain field in a patch does not overwrite; write $replace: { ${entry.key.raw}: … }`);
     }
     if (child.entry && child.entry.key.kind !== 'plain') return this.problems.error(entry, `"${entry.name}" is a formula or a marked key in the base; change it with $replace`);
     this.change(entry.value, child);
+  }
+
+  /** `run!task: { $after: … }`: a marked key whose patch only adds text before or after. */
+  private static addsText(entry: Entry): boolean {
+    const value = entry.value;
+    return entry.key.kind === 'marked' && value instanceof MapNode && value.entries.length > 0 && value.entries.every((item) => item.name === '$before' || item.name === '$after');
   }
 
   private replace(entry: Entry, target: Node): void {
@@ -152,7 +163,7 @@ export class Patch {
     const holder = target.entry?.map.get(target.entry.name);
     const now = holder?.value;
     const added = entry.value;
-    if (!holder || holder.key.kind !== 'plain' || !(now instanceof ScalarNode) || typeof now.value !== 'string' || !(added instanceof ScalarNode)) {
+    if (!holder || holder.key.kind === 'formula' || !(now instanceof ScalarNode) || typeof now.value !== 'string' || !(added instanceof ScalarNode)) {
       return this.problems.error(entry, `${entry.key.raw} adds text to a text field; this field is not text`);
     }
     const joined = where === 'start' ? `${added.source}\n${now.value}` : `${now.value.trimEnd()}\n${added.source}`;
