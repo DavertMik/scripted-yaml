@@ -407,6 +407,7 @@ That is the whole schema for `agents.yml`, written at the top of that file.
 |---|---|
 | `title` | a field; text unless said otherwise |
 | `agents*` | many: a list, or a map whose keys are the items' names |
+| `files+` | one value, or a list of them: `files: a.md` and `files: [a.md, b.md]` |
 | `launch:Look` | a field of a named shape |
 | `rules*:Rule` | many of that shape |
 | `Target: [issue, pr]` | a type that is a set of allowed words |
@@ -423,6 +424,30 @@ A shape may carry three more entries when a family of files needs them:
 | `with: { run: [command, path, line] }` | names the application supplies to a field when it computes it |
 | `rules:` | checks across the fields of one item, each `valid!` with a `message` |
 
+**What is under a marker.** A marked value is the application's, so a schema
+does not look inside it, unless `markers` names its type. The value as written
+under every `key!decide:`, wherever it is in the file, is then checked against
+that type, as a field of it would be:
+
+```yaml
+$schema:
+  markers: { decide: Decide }
+  Decide:
+    required: [question]
+    optional: [context:Context, threshold]
+  Context:
+    optional: [stages+, files+]
+```
+
+```yaml
+- id: ready
+  run!decide:
+    question: Did every test pass?
+    context: { stages: tests }
+```
+
+`run!decide: Did every test pass?` is then an error: Decide is a map.
+
 In a framework's run template, `{{ command }}` is the name the application
 supplies through `with`, not the `command:` list beside it.
 
@@ -434,8 +459,9 @@ See `examples/pipelines/pipeline.dsl.yml`.
 
 A DSL is for checking only (section 2). It may say that `STAGE_DIR` exists,
 but the value comes from the application, and a default belongs in the
-file's own `$vars`. It does not list markers or functions: markers are
-registered by the application, and functions are declared or imported by each file.
+file's own `$vars`. It does not register markers or functions: markers are
+registered by the application, which the DSL's `markers` only gives a shape, and
+functions are declared or imported by each file.
 
 **Types.** TypeScript types are generated from a `$schema`, so the data an
 application gets from `load` and `resolve` is typed. How they are generated
@@ -725,7 +751,7 @@ new ScriptedYaml({
 
 - `validate` checks its value as any value: a `{{ }}` that does not close, or a name that is not declared, is a problem, and the names it reads count.
 - `load` calls the function with the value as `document.data` has it: `Text` for text with `{{ }}`, a `Formula` for a `key!:` inside it.
-- `resolve` calls the function again, with the value computed, and puts what it returns in the result: `new Task("Write a test plan for https://staging")`. A value the application set on the marked key is not read.
+- `resolve` calls the function again, with the value computed, and puts what it returns in the result: `new Task("Write a test plan for https://staging")`. Once the application sets a value on the marked key, such as the answer to a question, a formula that reads the key reads that value; the result still holds what the function returned.
 
 Without `computed`, a marker gets its value as written, `{{ }}` and all: a
 shell command may hold `${{ github.sha }}`.

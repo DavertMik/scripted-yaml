@@ -110,8 +110,8 @@ export class Entry implements Located {
   readonly key: Key;
   /** In a patch, the entry this one replaced: `base` in its formulas. */
   base?: Entry;
-  /** What the marker function returned, once the file is loaded. */
-  marked?: { value: unknown };
+  /** What the marker function returned, once the file is loaded. `set`: the application gave the value since. */
+  marked?: { value: unknown; set?: boolean };
   /** The formula as `feelin` gets it, when that is not the text written: a function whose parameters are in its key. */
   formula?: string;
 

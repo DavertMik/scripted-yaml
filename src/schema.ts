@@ -4,10 +4,13 @@ import { Builtins } from './builtins.js';
 import { ListNode, MapNode, type Node, ScalarNode } from './node.js';
 import type { Located, Problems } from './problem.js';
 
-/** One word of a schema: `title`, `agents*`, `launch:Look`, `rules*:Rule`. */
+/** One word of a schema: `title`, `agents*`, `files+`, `launch:Look`, `rules*:Rule`. */
 export class Field {
   readonly name: string;
+  /** `agents*`: a list, or a map of items by name. */
   readonly many: boolean;
+  /** `files+`: one value, or a list of them. */
+  readonly oneOrMany: boolean;
   readonly type: string | undefined;
 
   constructor(
@@ -18,7 +21,8 @@ export class Field {
     const name = colon < 0 ? word : word.slice(0, colon);
     this.type = colon < 0 ? undefined : word.slice(colon + 1);
     this.many = name.endsWith('*');
-    this.name = this.many ? name.slice(0, -1) : name;
+    this.oneOrMany = name.endsWith('+');
+    this.name = this.many || this.oneOrMany ? name.slice(0, -1) : name;
   }
 }
 
@@ -112,6 +116,8 @@ export class Schema {
   readonly root: Shape;
   private readonly shapes = new Map<string, Shape>();
   private readonly words = new Map<string, string[]>();
+  /** `markers: { decide: Decide }`: the shape of the value under each `key!decide:`. */
+  private readonly markers = new Map<string, Field>();
 
   constructor(node: Node, problems: Problems) {
     const data = (node instanceof MapNode ? node.toData() : {}) as Record<string, unknown>;
@@ -123,7 +129,13 @@ export class Schema {
       if (Array.isArray(value)) this.words.set(name, value.map(String));
       else this.shapes.set(name, new Shape(name, (value ?? {}) as Record<string, unknown>, node, problems));
     }
-    for (const shape of [this.root, ...this.shapes.values()]) {
+    const markers = data.markers;
+    if (markers !== undefined && (typeof markers !== 'object' || markers === null || Array.isArray(markers))) {
+      problems.error(node, '$schema markers is a map of a marker to its type: markers: { decide: Decide }');
+    } else {
+      for (const [marker, type] of Object.entries((markers ?? {}) as Record<string, unknown>)) this.markers.set(marker, new Field(`${marker}:${String(type)}`, false));
+    }
+    for (const shape of [this.root, ...this.shapes.values(), { fields: this.markers }]) {
       for (const field of shape.fields.values()) {
         if (field.type !== undefined && !this.shapes.has(field.type) && !this.words.has(field.type)) problems.error(node, `the schema names the type "${field.type}" and does not define it`);
       }
@@ -133,6 +145,18 @@ export class Schema {
   /** Checks a file against the schema and notes on each map the shape it has. */
   check(root: MapNode, problems: Problems): void {
     this.fit(root, this.root, problems);
+    if (this.markers.size > 0) this.marked(root, problems);
+  }
+
+  /** Every `key!marker:` whose marker has a type, wherever it is: its value as written is checked against the type. */
+  private marked(node: Node, problems: Problems): void {
+    if (node instanceof ListNode) for (const item of node.items) this.marked(item, problems);
+    if (!(node instanceof MapNode)) return;
+    for (const entry of node.entries) {
+      const field = entry.key.kind === 'marked' ? this.markers.get(entry.key.marker!) : undefined;
+      if (field) this.one(entry.value, new Field(`${entry.key.raw}:${field.type}`, false), problems);
+      if (entry.key.kind !== 'formula') this.marked(entry.value, problems);
+    }
   }
 
   private fit(map: MapNode, shape: Shape, problems: Problems, named?: string): void {
@@ -176,6 +200,11 @@ export class Schema {
   }
 
   private value(node: Node, field: Field, problems: Problems): void {
+    if (field.oneOrMany) {
+      if (node instanceof ListNode) for (const item of node.items) this.one(item, field, problems);
+      else this.one(node, field, problems);
+      return;
+    }
     if (!field.many) return this.one(node, field, problems);
     const shape = field.type === undefined ? undefined : this.shapes.get(field.type);
     if (node instanceof ListNode) {
