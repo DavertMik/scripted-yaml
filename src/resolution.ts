@@ -148,6 +148,7 @@ export class Resolution {
     return entry.key.kind === 'marked' ? this.markerValue(entry, env) : this.viewOf(entry.value, env);
   }
 
+  /** A computed marker: the result holds its function's value for the computed value. */
   private isComputed(entry: Entry): boolean {
     return entry.key.kind === 'marked' && this.markers.computed.has(entry.key.marker!);
   }
@@ -169,7 +170,8 @@ export class Resolution {
    */
   private markerValue(entry: Entry, env: Env): unknown {
     if (this.read.has(entry)) return this.read.get(entry);
-    const raw = this.isComputed(entry) ? this.call(entry, this.viewOf(entry.value, env)) : entry.marked?.value;
+    // A value the application set, such as an answer, is what a formula reads, computed marker or not.
+    const raw = this.isComputed(entry) && !entry.marked?.set ? this.call(entry, this.viewOf(entry.value, env)) : entry.marked?.value;
     let value: unknown = null;
     if (typeof raw === 'boolean' || Resolution.isData(raw)) {
       value = raw;

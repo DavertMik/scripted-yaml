@@ -63,14 +63,14 @@ export class Marked {
   /**
    * What a formula and the result get. A formula reads a boolean, a map or a list of plain data as it is;
    * anything else by its `toString()`, with "1" as true and "0" as false. `resolve` calls a computed
-   * marker's function again, with the computed value, and does not read a value set here.
+   * marker's function again with the computed value for the result; a formula reads a value set here instead.
    */
   get value(): unknown {
     return this.entry.marked?.value;
   }
 
   set value(value: unknown) {
-    this.entry.marked = { value };
+    this.entry.marked = { value, set: true };
   }
 }
 

@@ -672,6 +672,11 @@ result.theme.accent;                                      // "gold"
 under `run!task:` as any value: its `{{ }}` is checked and counts as a read, `load` passes the
 function a `Text`, and `resolve` calls the function again with the text filled in. Other markers
 get their value as written, so `run!sh: echo ${{ github.sha }}` stays as it is.
+Once the application sets a value on the marked key, such as an answer, formulas read that value.
+
+**Marker shapes.** A marked value is not checked by `$schema` unless `markers` gives its type:
+`markers: { decide: Decide }` checks the value under every `key!decide:` against the shape
+`Decide`. A field written `files+` takes one value or a list of them.
 
 Only `load` and `loadText` return a promise: they import modules. `load` throws
 `ValidationFailed` with `.problems` on validation errors. `new ScriptedYaml({ strict: true })`

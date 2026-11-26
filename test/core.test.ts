@@ -289,6 +289,14 @@ describe('marked values', () => {
     ]);
   });
 
+  test('a formula reads the value the application set on a computed marker; the result keeps the computed one', () => {
+    const scripted = new ScriptedYaml({ markers: { decide: (value) => value }, computed: ['decide'] });
+    const document = scripted.loadTextSync('$vars:\n  X: {}\nready:\n  $value!decide: Is {{ vars.X }} green?\ngo!: ready\n');
+    expect(document.resolve({ vars: { X: 'it' } }).ready).toEqual({ $value: 'Is it green?' });
+    document.marked[0]!.value = true;
+    expect(document.resolve({ vars: { X: 'it' } })).toMatchObject({ ready: { $value: 'Is it green?' }, go: true });
+  });
+
   test('a marker not listed as computed gets its value as written', () => {
     const document = new ScriptedYaml({ markers: { sh: (value) => value } }).loadTextSync('run!sh: echo "${{ github.sha }}"\n');
     expect(document.resolve()).toEqual({ run: 'echo "${{ github.sha }}"' });
@@ -297,5 +305,44 @@ describe('marked values', () => {
   test('a resolve that fails still throws ResolveFailed', () => {
     const document = new ScriptedYaml().loadTextSync('$vars:\n  N: {}\nx!: vars.N\n');
     expect(catching(() => document.resolve())).toBeInstanceOf(ResolveFailed);
+  });
+});
+
+describe('the schema of a marker', () => {
+  const dsl = [
+    '$schema:',
+    '  optional: [stages*:Stage]',
+    '  markers: { decide: Decide }',
+    '  Stage:',
+    '    required: [id, run]',
+    '  Decide:',
+    '    required: [question]',
+    '    optional: [context:Context, threshold]',
+    '  Context:',
+    '    optional: [stages+, files+]',
+    '',
+  ].join('\n');
+  const scripted = new ScriptedYaml({ markers: ['decide', 'sh'] });
+  const check = (stages: string) => messages(scripted.validateText(`${dsl}stages:\n${stages}`));
+
+  test('a marked value is checked against the type its marker has, wherever it is', () => {
+    expect(check('  - id: a\n    run!decide:\n      question: Green?\n      context: { stages: review, files: [a.md, b.md] }\n')).toEqual([]);
+    expect(check('  - id: a\n    run!decide:\n      questoin: Green?\n')).toEqual([
+      'stages.a.run!decide  missing required field "question"',
+      'stages.a.run!decide.questoin  "questoin" is not a field of the schema',
+    ]);
+    expect(check('  - id: a\n    run!decide: Green?\n')).toEqual(['stages.a.run!decide  "run!decide" must be a map with the fields of Decide']);
+    expect(check('  - id: a\n    run!sh: { anything: goes }\n')).toEqual([]);
+  });
+
+  test('a + field takes one value or a list, not a map', () => {
+    expect(check('  - id: a\n    run!decide: { question: Green?, context: { stages: [a, b] } }\n')).toEqual([]);
+    const words = new ScriptedYaml().validateText('$schema:\n  optional: [tag+:Tag]\n  Tag: [a, b]\ntag: c\n');
+    expect(messages(words)).toEqual(['tag  "c" is not one of: a, b']);
+    expect(messages(new ScriptedYaml().validateText('$schema:\n  optional: [tag+:Tag]\n  Tag: [a, b]\ntag: [a, c]\n'))).toEqual(['tag[2]  "c" is not one of: a, b']);
+  });
+
+  test('a marker named with an unknown type is a problem of the schema', () => {
+    expect(messages(new ScriptedYaml().validateText('$schema:\n  optional: [a]\n  markers: { decide: Nope }\na: 1\n'))).toEqual(['$schema  the schema names the type "Nope" and does not define it']);
   });
 });
