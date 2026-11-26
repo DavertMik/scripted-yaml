@@ -635,7 +635,7 @@ class Script {
   constructor(readonly js: string) {}
 }
 
-// The only option: one function per marker. `action!js: openCheckout()` calls `js("openCheckout()")`.
+// One function per marker. `action!js: openCheckout()` calls `js("openCheckout()")`.
 const scripted = new ScriptedYaml({
   markers: { js: (source: string) => new Script(source) },
 });
@@ -664,9 +664,14 @@ result.theme.accent;                                      // "gold"
 | `document.resolve({ vars, functions })` | Resolved data; throws `ResolveFailed` on evaluation errors. `functions` passes the functions the file declares under `$functions` |
 | `document.test({ functions })` | Results of the file's `$tests` |
 | `document.merged()` | The file with `$extends` applied, as one file: keys as written, nothing computed |
-| `document.marked` | Each marked key; set its `value` after load, and `resolve` reads it |
+| `document.marked` | Each marked key; set its `value` after load, and `resolve` reads it. A formula reads a map or a list set there as data: `git.sha` |
 | `document.variables` | Declared inputs |
 | `document.functions` | Functions the file declares for the application to pass |
+
+**Computed markers.** `new ScriptedYaml({ markers: { task }, computed: ['task'] })` treats the value
+under `run!task:` as any value: its `{{ }}` is checked and counts as a read, `load` passes the
+function a `Text`, and `resolve` calls the function again with the text filled in. Other markers
+get their value as written, so `run!sh: echo ${{ github.sha }}` stays as it is.
 
 Only `load` and `loadText` return a promise: they import modules. `load` throws
 `ValidationFailed` with `.problems` on validation errors. `new ScriptedYaml({ strict: true })`
@@ -689,9 +694,9 @@ A class that extends `Files` reads from anywhere: its `read(path, from)` returns
 ## The command line
 
 ```
-scripted-yaml validate <file>... [--markers sh,mdq]
-scripted-yaml parse <file> [--var NAME=value]... [--vars file.json] [--markers sh,mdq]
-scripted-yaml test <file>... [--markers sh,mdq]
+scripted-yaml validate <file>... [--markers sh,mdq] [--computed task]
+scripted-yaml parse <file> [--var NAME=value]... [--vars file.json] [--markers sh,mdq] [--computed task]
+scripted-yaml test <file>... [--markers sh,mdq] [--computed task]
 scripted-yaml skill [--install [local|global]]
 scripted-yaml templates
 scripted-yaml --version

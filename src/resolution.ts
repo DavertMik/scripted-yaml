@@ -1,6 +1,6 @@
 import { evaluate } from 'feelin';
 import { Builtins } from './builtins.js';
-import type { Document } from './document.js';
+import type { Document, Markers } from './document.js';
 import { Formula, Text } from './expression.js';
 import type { LazyFormula } from './lazy-formula.js';
 import type { Imported } from './importers.js';
@@ -59,6 +59,7 @@ export class Resolution {
     private readonly imports: Map<string, Imported>,
     private readonly input: Record<string, unknown>,
     private readonly functions: Record<string, unknown> = {},
+    private readonly markers: Markers = { functions: {}, computed: new Set() },
   ) {
     this.scope = new Scope(source);
     const { values, missing, mismatches } = source.variables.values(input);
@@ -112,7 +113,9 @@ export class Resolution {
     for (const entry of this.effective(node, env)) {
       const name = entry.name;
       if (entry.key.keyword && name !== '$value') continue;
-      if (entry.key.kind === 'marked') {
+      if (this.isComputed(entry)) {
+        out[name] = this.call(entry, this.output(entry.value, env));
+      } else if (entry.key.kind === 'marked') {
         out[name] = entry.marked?.value;
         this.afterwards.push(() => {
           if (this.read.has(entry)) out[name] = this.read.get(entry);
@@ -142,15 +145,33 @@ export class Resolution {
   }
 
   private entryView(entry: Entry, env: Env): unknown {
-    return entry.key.kind === 'marked' ? this.markerValue(entry) : this.viewOf(entry.value, env);
+    return entry.key.kind === 'marked' ? this.markerValue(entry, env) : this.viewOf(entry.value, env);
   }
 
-  /** A marker's result as a formula reads it: a boolean, or its toString(), where "1" is true and "0" is false. Asked once. */
-  private markerValue(entry: Entry): unknown {
+  private isComputed(entry: Entry): boolean {
+    return entry.key.kind === 'marked' && this.markers.computed.has(entry.key.marker!);
+  }
+
+  /** A computed marker's function, given the computed value. */
+  private call(entry: Entry, value: unknown): unknown {
+    const marker = this.markers.functions[entry.key.marker!];
+    if (!marker) return value;
+    try {
+      return marker(value);
+    } catch (error) {
+      this.fail(entry, `the function of the marker "${entry.key.marker}" failed: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * A marker's result as a formula reads it: a boolean, a map or a list of plain data as it is, else its
+   * toString(), where "1" is true and "0" is false. Asked once.
+   */
+  private markerValue(entry: Entry, env: Env): unknown {
     if (this.read.has(entry)) return this.read.get(entry);
-    const raw = entry.marked?.value;
+    const raw = this.isComputed(entry) ? this.call(entry, this.viewOf(entry.value, env)) : entry.marked?.value;
     let value: unknown = null;
-    if (typeof raw === 'boolean') {
+    if (typeof raw === 'boolean' || Resolution.isData(raw)) {
       value = raw;
     } else if (raw !== null && raw !== undefined) {
       let text: string;
@@ -163,6 +184,14 @@ export class Resolution {
     }
     this.read.set(entry, value);
     return value;
+  }
+
+  /** A list, or a map made as `{ }` is: data a formula reads into. An object of a class is read by its text. */
+  private static isData(value: unknown): boolean {
+    if (Array.isArray(value)) return true;
+    if (typeof value !== 'object' || value === null) return false;
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
   }
 
   // ── structure: $if, $unless, $each, $when ──
