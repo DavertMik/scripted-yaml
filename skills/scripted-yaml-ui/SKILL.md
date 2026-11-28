@@ -31,6 +31,14 @@ The framework, the components and the look are yours to choose, from what the pr
 the DSL file only if you pass it the files: `new ScriptedYaml({ files: new MemoryFiles(...) })`.
 Pass `markers: ['sh', …]` for the markers the files use.
 
+`MemoryFiles` resolves paths the way the disk does: key every file by its path from one root
+folder (the project root the server reads from), and a path in a file is resolved beside that
+file. With the keys `rules/a.yml` and `config.dsl.yml`, `$dsl: ../config.dsl.yml` in `rules/a.yml`
+finds the DSL; pass `'rules/a.yml'` as the `file` of `validateText`. Keys are normalized (`./a.yml`
+is `a.yml`). A missing file is reported as `cannot read "<path>": the file does not exist` on the
+line that names it. `MemoryFiles` does not import `.js`/`.ts` modules: extend it and override
+`module(file)` for that.
+
 **Keep the file as the owner wrote it.** Parse with the `yaml` package's `parseDocument` and never
 rebuild the file from JSON. `doc.toString()` rewrites more than the edit (it wraps long lines,
 drops column alignment, adds spaces inside `[ ]`), so:

@@ -693,7 +693,9 @@ const scripted = new ScriptedYaml({ files: new MemoryFiles({ 'base.yml': baseTex
 const document = scripted.loadTextSync('$extends: base.yml\n…', { file: 'mine.yml' });
 ```
 
-A class that extends `Files` reads from anywhere: its `read(path, from)` returns
+`MemoryFiles` keys are paths from one root folder, and a path is resolved beside the file that
+names it, as on the disk: with `rules/a.yml` and `config.dsl.yml`, `rules/a.yml` writes
+`$dsl: ../config.dsl.yml`. A class that extends `Files` reads from anywhere: its `read(path, from)` returns
 `{ file, text }`, undefined for no such file, or throws with its own message.
 
 ## The command line

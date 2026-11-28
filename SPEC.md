@@ -662,6 +662,9 @@ const checker = new ScriptedYaml({ markers: ['sh'] });
 object. `scripted-yaml` reads the disk with `DiskFiles`. `scripted-yaml/core`
 is the same library without Node: it imports no `node:` module, so it bundles
 for a browser or a Cloudflare Worker, and it reads only the files it is given.
+`MemoryFiles` holds files by path from one root folder and resolves a path beside
+the file that names it, as `DiskFiles` does: `rules/a.yml` names `config.dsl.yml`
+as `../config.dsl.yml`. Keys are normalized, so `./a.yml` and `a.yml` are one file.
 
 ```ts
 import { Files, MemoryFiles, ScriptedYaml } from 'scripted-yaml/core';
