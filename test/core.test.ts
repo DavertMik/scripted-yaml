@@ -68,6 +68,31 @@ describe('files the application gives', () => {
     expect(messages(new ScriptedYaml().validateText('$extends: base\n'))).toEqual(['$extends  cannot read "base": the file does not exist']);
   });
 
+  test('in memory, a path is beside the file that names it, as on the disk', () => {
+    const dsl = '$schema:\n  required: [price]\n';
+    const files = new MemoryFiles({ 'config.dsl.yml': dsl, 'rules/a.yml': '$dsl: ../config.dsl.yml\nprice: 1\n', 'rules/deep/b.yml': '$dsl: ../../config.dsl.yml\ncost: 1\n' });
+    const scripted = new ScriptedYaml({ files });
+    expect(scripted.validate('rules/a.yml')).toEqual([]);
+    expect(messages(scripted.validate('rules/deep/b.yml'))).toEqual(['  missing required field "price"', 'cost  "cost" is not a field of the schema']);
+  });
+
+  test('in memory, one relative path in two folders is two files', async () => {
+    const files = new MemoryFiles({ 'a/base.yml': 'v: 1\n', 'b/base.yml': 'v: 2\n', 'a/x.yml': '$extends: base.yml\n', 'b/x.yml': '$extends: base.yml\n' });
+    const scripted = new ScriptedYaml({ files });
+    expect((await scripted.load('a/x.yml')).resolve()).toEqual({ v: 1 });
+    expect((await scripted.load('b/x.yml')).resolve()).toEqual({ v: 2 });
+  });
+
+  test('in memory, ./a and a are one file: a loop through both is found', () => {
+    const files = new MemoryFiles({ './a.yml': '$extends: ./b.yml\n', 'b.yml': '$extends: a.yml\n' });
+    expect(messages(new ScriptedYaml({ files }).validate('a.yml'))).toEqual(['$extends  "a.yml" extends itself, directly or through other files']);
+  });
+
+  test('in memory, a missing path is reported on the line that names it', () => {
+    const files = new MemoryFiles({ 'rules/a.yml': '$dsl: config.dsl.yml\n' });
+    expect(messages(new ScriptedYaml({ files }).validate('rules/a.yml'))).toEqual(['$dsl  cannot read "config.dsl.yml": the file does not exist']);
+  });
+
   test('a YAML file imported from memory', () => {
     const files = new MemoryFiles({ 'rates.yml': 'vip: 0.2\n' });
     const document = new ScriptedYaml({ files }).loadTextSync('$import:\n  rates.yml: rates\ncut!: rates.vip * 100\n', { file: 'shop.yml' });

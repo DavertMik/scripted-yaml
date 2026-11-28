@@ -1,3 +1,5 @@
+import { dirname, join, normalize } from 'pathe';
+
 /** A file another file names, as the application gives it. */
 export interface FileText {
   /** The name the file goes by: in problems, and in the paths it names in turn. Two files with one name are one file. */
@@ -29,22 +31,31 @@ export abstract class Files {
   }
 }
 
-/** Files held in memory, by name. A file names another by its name exactly. */
+/**
+ * Files held in memory, by path from one root folder, as on a disk: a path is beside the file that
+ * names it, so `rules/a.yml` names `rules/../config.dsl.yml`, the key `config.dsl.yml`, with
+ * `$dsl: ../config.dsl.yml`. Keys are normalized: `./a.yml` and `a.yml` are one file.
+ */
 export class MemoryFiles extends Files {
-  private readonly files: Map<string, string>;
+  private readonly files = new Map<string, string>();
 
   constructor(files: Record<string, string> = {}) {
     super();
-    this.files = new Map(Object.entries(files));
+    for (const [name, text] of Object.entries(files)) this.set(name, text);
   }
 
-  read(path: string): FileText | undefined {
-    const text = this.files.get(path);
-    return text === undefined ? undefined : { file: path, text };
+  read(path: string, from: string | undefined): FileText | undefined {
+    const file = from === undefined ? normalize(path) : join(dirname(from), path);
+    const text = this.files.get(file);
+    return text === undefined ? undefined : { file, text };
+  }
+
+  key(file: string): string {
+    return normalize(file);
   }
 
   set(name: string, text: string): this {
-    this.files.set(name, text);
+    this.files.set(normalize(name), text);
     return this;
   }
 }
